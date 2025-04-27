@@ -1,0 +1,19 @@
+name: HTML Lint Check
+
+on:
+  push:
+    branches: [ develop ] # developブランチにpushされたときだけ動かす！
+
+jobs:
+  lint-html:  # ジョブ（処理の塊）名
+    runs-on: ubuntu-latest  # Ubuntu Linuxの最新環境で実行する
+
+    steps:
+      - name: Checkout repository  # ステップ1：GitHubのリポジトリからコードを取得する
+        uses: actions/checkout@v3  # 公式アクションを使う（バージョン3）
+
+      - name: Install tidy (HTML linter)  # ステップ2：HTML検査ツール tidy をインストールする
+        run: sudo apt-get install tidy  # Ubuntuのパッケージマネージャaptを使ってインストール
+
+      - name: Run HTML validation  # ステップ3：実際にHTML検査を実行する
+        run: tidy -errors -q index.html  # index.htmlをチェック。エラーだけ表示する（-errorsオプション）
