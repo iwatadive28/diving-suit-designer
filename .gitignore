@@ -1,0 +1,34 @@
+# macOS ゴミファイル
+.DS_Store
+
+# Windows ゴミファイル
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Node.js 関連（将来npm使う場合の保険）
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# Vercel CLI設定ファイル（使う場合）
+.vercel/
+
+# ビルドファイル（将来ViteやNext.js移行時対応）
+dist/
+build/
+.next/
+
+# 環境設定系（今はないけど将来用）
+.env
+.env.local
+.env.production
+.env.development
+
+# ローカルサーバ用キャッシュ
+*.cache
+
+# その他不要な一時ファイル
+*.log
+*.tmp
