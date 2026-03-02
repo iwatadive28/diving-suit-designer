@@ -40,6 +40,22 @@ function normalizeThemes(themes: ColorTheme[], colorIds: Set<string>, stitchIds:
   }));
 }
 
+function normalizeColors(colorsRaw: Color[]): Color[] {
+  return colorsRaw
+    .filter((color) => color.enabled)
+    .map((color) => {
+      const tile = color.patternTile?.trim();
+      if (!tile) {
+        return { ...color, patternTile: undefined };
+      }
+      if (!tile.startsWith("/")) {
+        console.warn(`[color:${color.id}] patternTileはルートパス推奨です: ${tile}`);
+      }
+      return { ...color, patternTile: tile };
+    })
+    .sort((a, b) => a.order - b.order);
+}
+
 function normalizeAllowColors(
   partId: string,
   allowColors: string[] | undefined,
@@ -113,7 +129,7 @@ export async function loadConfig(): Promise<AppConfig> {
     loadJson<Part[]>("/config/parts.json"),
   ]);
 
-  const colors = colorsRaw.filter((color) => color.enabled).sort((a, b) => a.order - b.order);
+  const colors = normalizeColors(colorsRaw);
   const stitchColors = stitchRaw.filter((color) => color.enabled).sort((a, b) => a.order - b.order);
 
   const validColorIds = new Set(colors.map((color) => color.id));

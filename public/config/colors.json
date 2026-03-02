@@ -21,9 +21,9 @@
   { "id": "france", "name": "フランス", "hex": "#213c72", "enabled": true, "order": 250 },
   { "id": "navy", "name": "ネイビー", "hex": "#16224f", "enabled": true, "order": 260 },
   { "id": "melange_bk", "name": "メランジBK", "hex": "#3f4349", "enabled": true, "order": 300 },
-  { "id": "checker_red", "name": "チェッカー赤", "hex": "#d32d2d", "enabled": true, "order": 310 },
-  { "id": "checker_black", "name": "チェッカー黒", "hex": "#242a33", "enabled": true, "order": 320 },
-  { "id": "camo_khaki", "name": "カモカーキ", "hex": "#3f4c36", "enabled": true, "order": 330 },
-  { "id": "camo_gray", "name": "カモグレイ", "hex": "#5a5f66", "enabled": true, "order": 340 },
+  { "id": "checker_red", "name": "チェッカー赤", "hex": "#d32d2d", "patternTile": "/assets/patterns/checker_red.png", "enabled": true, "order": 310 },
+  { "id": "checker_black", "name": "チェッカー黒", "hex": "#242a33", "patternTile": "/assets/patterns/checker_black.png", "enabled": true, "order": 320 },
+  { "id": "camo_khaki", "name": "カモカーキ", "hex": "#3f4c36", "patternTile": "/assets/patterns/camo_khaki.png", "enabled": true, "order": 330 },
+  { "id": "camo_gray", "name": "カモグレイ", "hex": "#5a5f66", "patternTile": "/assets/patterns/camo_gray.png", "enabled": true, "order": 340 },
   { "id": "melange_blue", "name": "メランジ蒼", "hex": "#6f8fd6", "enabled": true, "order": 350 }
 ]

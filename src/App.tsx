@@ -1,4 +1,11 @@
-﻿import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+﻿import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type TouchEvent,
+} from "react";
 import { loadConfig } from "./lib/config";
 import { choosePreviewSize } from "./lib/perf";
 import {
@@ -13,12 +20,26 @@ import type { AppConfig, Color, ColorTheme, Part, SuitState, Toast } from "./typ
 
 const MAX_SHARE_URL_LENGTH = 2000;
 const RECENT_STORAGE_KEY = "recent_colors_v3";
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 3;
 
 type PaletteState = {
   open: boolean;
   x: number;
   y: number;
   partId: string | null;
+};
+
+type Point = { x: number; y: number };
+
+type TouchRuntime = {
+  mode: "none" | "tap" | "pan" | "pinch";
+  lastX: number;
+  lastY: number;
+  moved: boolean;
+  pinchStartDistance: number;
+  pinchStartZoom: number;
+  lastTapAt: number;
 };
 
 function createDefaultState(config: AppConfig): SuitState {
@@ -87,7 +108,9 @@ function sanitizeState(raw: SuitState, config: AppConfig): SuitState {
     config.parts.map((part) => {
       const selected = raw.parts[part.id];
       const selectable = resolveSelectableColors(part, config.colors).map((color) => color.id);
-      const fallback = selectable.includes(part.defaultColor) ? part.defaultColor : selectable[0] ?? config.colors[0]?.id ?? "black";
+      const fallback = selectable.includes(part.defaultColor)
+        ? part.defaultColor
+        : selectable[0] ?? config.colors[0]?.id ?? "black";
       return [part.id, selected && selectable.includes(selected) && colorSet.has(selected) ? selected : fallback];
     }),
   );
@@ -129,6 +152,72 @@ function applyRandomRecommendation(theme: ColorTheme, config: AppConfig, state: 
   };
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function clampPalettePosition(anchor: Point, paletteSize: { width: number; height: number }, viewportSize: { width: number; height: number }): Point {
+  const margin = 8;
+  return {
+    x: clamp(anchor.x, margin + paletteSize.width / 2, viewportSize.width - margin - paletteSize.width / 2),
+    y: clamp(anchor.y, margin + paletteSize.height / 2, viewportSize.height - margin - paletteSize.height / 2),
+  };
+}
+
+function toImageSpacePoint(screenPoint: Point, zoom: number, panX: number, panY: number, viewportSize: { width: number; height: number }): Point {
+  const cx = viewportSize.width / 2;
+  const cy = viewportSize.height / 2;
+
+  return {
+    x: ((screenPoint.x - cx - panX) / zoom) + cx,
+    y: ((screenPoint.y - cy - panY) / zoom) + cy,
+  };
+}
+
+function clampPan(panX: number, panY: number, zoom: number, viewportSize: { width: number; height: number }): Point {
+  if (zoom <= 1) {
+    return { x: 0, y: 0 };
+  }
+
+  const maxX = ((zoom - 1) * viewportSize.width) / 2;
+  const maxY = ((zoom - 1) * viewportSize.height) / 2;
+
+  return {
+    x: clamp(panX, -maxX, maxX),
+    y: clamp(panY, -maxY, maxY),
+  };
+}
+
+function estimatePaletteSize(colorCount: number, isMobile: boolean): { width: number; height: number } {
+  const columns = isMobile ? 6 : 5;
+  const rows = Math.max(1, Math.ceil(colorCount / columns));
+  return {
+    width: isMobile ? 250 : 220,
+    height: 42 + rows * 38,
+  };
+}
+
+function buildBlackState(config: AppConfig, current: SuitState): SuitState {
+  const nextParts: Record<string, string> = {};
+  config.parts.forEach((part) => {
+    const selectable = resolveSelectableColors(part, config.colors).map((color) => color.id);
+    nextParts[part.id] = selectable.includes("black") ? "black" : (selectable[0] ?? part.defaultColor);
+  });
+
+  const stitchBlack = config.stitchColors.find((color) => color.id === "st_black")?.id ?? config.stitchColors[0]?.id;
+
+  return {
+    ...current,
+    parts: nextParts,
+    preset: undefined,
+    stitchColor: stitchBlack,
+  };
+}
+
+function distance(a: Point, b: Point): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
 function App(): JSX.Element {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -143,8 +232,24 @@ function App(): JSX.Element {
   const [selectedThemeId, setSelectedThemeId] = useState<string>("");
   const [partPanelCollapsed, setPartPanelCollapsed] = useState(false);
   const [palette, setPalette] = useState<PaletteState>({ open: false, x: 50, y: 50, partId: null });
+  const [isMobile, setIsMobile] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
 
   const previewBoxRef = useRef<HTMLDivElement | null>(null);
+  const paletteRef = useRef<HTMLDivElement | null>(null);
+  const touchRuntimeRef = useRef<TouchRuntime>({
+    mode: "none",
+    lastX: 0,
+    lastY: 0,
+    moved: false,
+    pinchStartDistance: 0,
+    pinchStartZoom: 1,
+    lastTapAt: 0,
+  });
+
   const previewSize = useMemo(() => choosePreviewSize(), []);
 
   const addToast = (message: string): void => {
@@ -157,6 +262,13 @@ function App(): JSX.Element {
 
   useEffect(() => {
     setRecentColors(readRecentColors());
+
+    const media = window.matchMedia("(max-width: 960px)");
+    const applyMobile = (): void => setIsMobile(media.matches);
+    applyMobile();
+    media.addEventListener("change", applyMobile);
+
+    return () => media.removeEventListener("change", applyMobile);
   }, []);
 
   useEffect(() => {
@@ -165,8 +277,8 @@ function App(): JSX.Element {
     async function boot(): Promise<void> {
       try {
         setLoading(true);
-        await initializeComposer();
         const loaded = await loadConfig();
+        await initializeComposer(loaded.colors);
         if (!alive) return;
 
         const parsed = deserializeState(window.location.search);
@@ -226,6 +338,22 @@ function App(): JSX.Element {
     };
   }, [config, state, previewSize, selectedPartId]);
 
+  useEffect(() => {
+    if (!palette.open || !paletteRef.current || !previewBoxRef.current) return;
+
+    const paletteEl = paletteRef.current;
+    const rect = previewBoxRef.current.getBoundingClientRect();
+    const clamped = clampPalettePosition(
+      { x: palette.x, y: palette.y },
+      { width: paletteEl.offsetWidth, height: paletteEl.offsetHeight },
+      { width: rect.width, height: rect.height },
+    );
+
+    if (Math.abs(clamped.x - palette.x) > 0.5 || Math.abs(clamped.y - palette.y) > 0.5) {
+      setPalette((prev) => ({ ...prev, x: clamped.x, y: clamped.y }));
+    }
+  }, [palette.open, palette.x, palette.y, selectedPartId]);
+
   if (loading) {
     return <div className="loading">読み込み中...</div>;
   }
@@ -244,6 +372,24 @@ function App(): JSX.Element {
   const selectableForSelected = resolveSelectableColors(selectedPart, config.colors);
   const colorIds = sortColorIdsByRecent(selectableForSelected.map((color) => color.id), recentColors);
 
+  const openPaletteAt = (anchor: Point, partId: string): void => {
+    const part = config.parts.find((item) => item.id === partId) ?? selectedPart;
+    const colors = resolveSelectableColors(part, config.colors);
+    const box = previewBoxRef.current;
+    if (!box) return;
+
+    const rect = box.getBoundingClientRect();
+    const size = estimatePaletteSize(colors.length, isMobile);
+    const clamped = clampPalettePosition(anchor, size, { width: rect.width, height: rect.height });
+
+    setPalette({
+      open: true,
+      x: clamped.x,
+      y: clamped.y,
+      partId,
+    });
+  };
+
   const onSelectColor = (colorId: string, partId = selectedPart.id): void => {
     const targetPart = config.parts.find((part) => part.id === partId) ?? selectedPart;
     const selectable = resolveSelectableColors(targetPart, config.colors);
@@ -254,13 +400,21 @@ function App(): JSX.Element {
 
     setState((prev) => {
       if (!prev) return prev;
-      return {
+      const beforeStitch = prev.stitchColor;
+      const next: SuitState = {
         ...prev,
         parts: {
           ...prev.parts,
           [targetPart.id]: colorId,
         },
+        stitchColor: prev.stitchColor,
       };
+
+      if (window.location.hostname === "localhost" && next.stitchColor !== beforeStitch) {
+        console.warn("パネル色変更でステッチ色が変化しました。処理を確認してください。");
+      }
+
+      return next;
     });
 
     setSelectedPartId(targetPart.id);
@@ -294,6 +448,7 @@ function App(): JSX.Element {
     });
 
     setPalette((prev) => ({ ...prev, open: false }));
+    setMenuOpen(false);
   };
 
   const onRecommendRandom = (): void => {
@@ -309,16 +464,26 @@ function App(): JSX.Element {
     });
     addToast(`おすすめを生成しました: ${theme.name}`);
     setPalette((prev) => ({ ...prev, open: false }));
+    setMenuOpen(false);
   };
 
-  const onPreviewClick = (event: MouseEvent<HTMLDivElement>): void => {
+  const onResetBlack = (): void => {
+    setState((prev) => {
+      if (!prev) return prev;
+      return sanitizeState(buildBlackState(config, prev), config);
+    });
+    setPalette((prev) => ({ ...prev, open: false }));
+    addToast("全身をブラックにリセットしました。");
+    setMenuOpen(false);
+  };
+
+  const handlePreviewTapPoint = (screenPoint: Point): void => {
     const box = previewBoxRef.current;
     if (!box) return;
-
     const rect = box.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    const picked = pickPartIdByDisplayPoint(x, y, rect.width, rect.height);
+
+    const srcPoint = toImageSpacePoint(screenPoint, zoom, panX, panY, { width: rect.width, height: rect.height });
+    const picked = pickPartIdByDisplayPoint(srcPoint.x, srcPoint.y, rect.width, rect.height);
 
     if (!picked) {
       setPalette((prev) => ({ ...prev, open: false }));
@@ -326,12 +491,115 @@ function App(): JSX.Element {
     }
 
     setSelectedPartId(picked);
-    setPalette({
-      open: true,
-      x: (x / rect.width) * 100,
-      y: (y / rect.height) * 100,
-      partId: picked,
-    });
+    openPaletteAt(screenPoint, picked);
+  };
+
+  const onPreviewClick = (event: MouseEvent<HTMLDivElement>): void => {
+    const box = previewBoxRef.current;
+    if (!box) return;
+
+    const rect = box.getBoundingClientRect();
+    const screenPoint = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    handlePreviewTapPoint(screenPoint);
+  };
+
+  const onPreviewTouchStart = (event: TouchEvent<HTMLDivElement>): void => {
+    const rt = touchRuntimeRef.current;
+
+    if (event.touches.length === 2) {
+      const a = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+      const b = { x: event.touches[1].clientX, y: event.touches[1].clientY };
+      rt.mode = "pinch";
+      rt.pinchStartDistance = distance(a, b);
+      rt.pinchStartZoom = zoom;
+      rt.moved = false;
+      return;
+    }
+
+    if (event.touches.length === 1) {
+      const t = event.touches[0];
+      rt.mode = zoom > 1 ? "pan" : "tap";
+      rt.lastX = t.clientX;
+      rt.lastY = t.clientY;
+      rt.moved = false;
+    }
+  };
+
+  const onPreviewTouchMove = (event: TouchEvent<HTMLDivElement>): void => {
+    const box = previewBoxRef.current;
+    if (!box) return;
+    const rect = box.getBoundingClientRect();
+    const rt = touchRuntimeRef.current;
+
+    if (rt.mode === "pinch" && event.touches.length === 2) {
+      event.preventDefault();
+      const a = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+      const b = { x: event.touches[1].clientX, y: event.touches[1].clientY };
+      const d = Math.max(1, distance(a, b));
+      const ratio = d / Math.max(1, rt.pinchStartDistance);
+      const nextZoom = clamp(rt.pinchStartZoom * ratio, MIN_ZOOM, MAX_ZOOM);
+      setZoom(nextZoom);
+      const clampedPan = clampPan(panX, panY, nextZoom, { width: rect.width, height: rect.height });
+      setPanX(clampedPan.x);
+      setPanY(clampedPan.y);
+      rt.moved = true;
+      return;
+    }
+
+    if (rt.mode === "pan" && event.touches.length === 1) {
+      event.preventDefault();
+      const t = event.touches[0];
+      const dx = t.clientX - rt.lastX;
+      const dy = t.clientY - rt.lastY;
+      rt.lastX = t.clientX;
+      rt.lastY = t.clientY;
+      if (Math.abs(dx) + Math.abs(dy) > 1) {
+        rt.moved = true;
+      }
+      const nextPan = clampPan(panX + dx, panY + dy, zoom, { width: rect.width, height: rect.height });
+      setPanX(nextPan.x);
+      setPanY(nextPan.y);
+      return;
+    }
+
+    if (rt.mode === "tap" && event.touches.length === 1) {
+      const t = event.touches[0];
+      if (Math.hypot(t.clientX - rt.lastX, t.clientY - rt.lastY) > 8) {
+        rt.moved = true;
+      }
+    }
+  };
+
+  const onPreviewTouchEnd = (event: TouchEvent<HTMLDivElement>): void => {
+    const box = previewBoxRef.current;
+    if (!box) return;
+
+    const rt = touchRuntimeRef.current;
+
+    if (event.touches.length > 0) {
+      return;
+    }
+
+    const now = Date.now();
+
+    if (!rt.moved && rt.mode === "tap") {
+      const rect = box.getBoundingClientRect();
+      const changed = event.changedTouches[0];
+      if (changed) {
+        const point = { x: changed.clientX - rect.left, y: changed.clientY - rect.top };
+        if (now - rt.lastTapAt < 280) {
+          setZoom(1);
+          setPanX(0);
+          setPanY(0);
+        } else {
+          handlePreviewTapPoint(point);
+        }
+      }
+      rt.lastTapAt = now;
+    }
+
+    rt.mode = "none";
+    rt.moved = false;
   };
 
   const palettePart = palette.partId
@@ -350,6 +618,7 @@ function App(): JSX.Element {
     try {
       await navigator.clipboard.writeText(shareUrl);
       addToast("共有URLをコピーしました。");
+      setMenuOpen(false);
     } catch {
       addToast("URLコピーに失敗しました。");
     }
@@ -362,6 +631,7 @@ function App(): JSX.Element {
       const filename = fileNameInput.trim() ? `${fileNameInput.trim()}_suit.png` : `suit_${todayLabel()}.png`;
       triggerDownload(blob, filename);
       addToast("スーツ画像を保存しました。");
+      setMenuOpen(false);
     } catch (error) {
       addToast(error instanceof Error ? error.message : "画像保存に失敗しました。");
     } finally {
@@ -376,6 +646,7 @@ function App(): JSX.Element {
       const filename = fileNameInput.trim() ? `${fileNameInput.trim()}_spec.png` : `spec_${todayLabel()}.png`;
       triggerDownload(blob, filename);
       addToast("仕様書PNGを保存しました。");
+      setMenuOpen(false);
     } catch (error) {
       addToast(error instanceof Error ? error.message : "仕様書生成に失敗しました。");
     } finally {
@@ -397,28 +668,95 @@ function App(): JSX.Element {
       win.focus();
       win.print();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
+      setMenuOpen(false);
     } catch (error) {
       addToast(error instanceof Error ? error.message : "印刷用生成に失敗しました。");
     }
   };
 
+  const titleText = isMobile ? "セミドライスーツシミュレーター" : "セミドライスーツデザインシミュレーター";
+
+  const menuSection = (
+    <>
+      <div className="menu-section">
+        <h3>プリセット / ランダムおすすめ</h3>
+        <div className="preset-grid">
+          {config.presets.map((preset) => (
+            <button key={preset.id} type="button" className="preset-btn" onClick={() => onApplyPreset(preset.id)}>
+              {preset.name}
+            </button>
+          ))}
+        </div>
+        <div className="recommend-row">
+          <select value={selectedThemeId} onChange={(event) => setSelectedThemeId(event.target.value)}>
+            {config.colorThemes.map((theme) => (
+              <option key={theme.id} value={theme.id}>{theme.name}</option>
+            ))}
+          </select>
+          <button type="button" className="preset-btn" onClick={onRecommendRandom}>おすすめ生成</button>
+        </div>
+      </div>
+
+      <div className="menu-section">
+        <h3>出力 / 共有</h3>
+        <div className="save-row">
+          <input
+            value={fileNameInput}
+            onChange={(event) => setFileNameInput(event.target.value)}
+            type="text"
+            placeholder="案件名（任意）"
+          />
+          <button type="button" onClick={onSaveSuitPng} disabled={isSaving}>スーツ画像保存</button>
+        </div>
+        <div className="action-row">
+          <button type="button" className="share-btn" onClick={onSaveSpecPng} disabled={isSaving}>仕様書PNG</button>
+          <button type="button" className="share-btn" onClick={onPrintSpec}>印刷</button>
+          <button type="button" className="share-btn" onClick={onCopyUrl}>URLコピー</button>
+        </div>
+      </div>
+
+      <div className="menu-section">
+        <button type="button" className="danger-btn" onClick={onResetBlack}>全身ブラックにリセット</button>
+      </div>
+    </>
+  );
+
   return (
     <div className="app-shell">
       <header className="hero">
-        <p className="hero-tag">ORDER SHEET READY</p>
-        <h1>セミドライスーツデザインシミュレーター</h1>
+        <div className="hero-head-row">
+          <p className="hero-tag">ORDER SHEET READY</p>
+          {isMobile ? (
+            <button type="button" className="menu-toggle" onClick={() => setMenuOpen((prev) => !prev)} aria-label="メニュー">
+              ☰
+            </button>
+          ) : null}
+        </div>
+        <h1>{titleText}</h1>
       </header>
 
       <main className="layout-v2">
         <section className="top-grid">
           <div className="section-block preview-panel">
             <h2>デザインプレビュー（画像タップで部位と色を選択）</h2>
-            <div className="preview-canvas-wrap" ref={previewBoxRef} onClick={onPreviewClick} role="button" tabIndex={0}>
-              {previewUrl ? <img src={previewUrl} className="preview-image" alt="スーツプレビュー" /> : null}
+            <div
+              className="preview-canvas-wrap"
+              ref={previewBoxRef}
+              onClick={onPreviewClick}
+              onTouchStart={onPreviewTouchStart}
+              onTouchMove={onPreviewTouchMove}
+              onTouchEnd={onPreviewTouchEnd}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="preview-transform" style={{ transform: `translate(${panX}px, ${panY}px) scale(${zoom})` }}>
+                {previewUrl ? <img src={previewUrl} className="preview-image" alt="スーツプレビュー" /> : null}
+              </div>
               {palette.open ? (
                 <div
+                  ref={paletteRef}
                   className="tap-palette"
-                  style={{ left: `${palette.x}%`, top: `${palette.y}%` }}
+                  style={{ left: `${palette.x}px`, top: `${palette.y}px` }}
                   onClick={(event) => event.stopPropagation()}
                 >
                   <div className="tap-palette-title">{palettePart.name}</div>
@@ -439,7 +777,8 @@ function App(): JSX.Element {
                 </div>
               ) : null}
             </div>
-            <p className="hint">選択中: {selectedPart.id}. {selectedPart.name}</p>
+            <p className="hint">選択中: {selectedPart ? `${selectedPart.id}. ${selectedPart.name}` : "未選択"}</p>
+            <p className="hint zoom">ズーム: {zoom.toFixed(2)}x（2本指ピンチ / 1本指ドラッグ / ダブルタップで戻す）</p>
           </div>
 
           <div className="section-block part-panel">
@@ -513,43 +852,20 @@ function App(): JSX.Element {
           </div>
         </section>
 
-        <section className="section-block">
-          <h2>プリセット / ランダムおすすめ</h2>
-          <div className="preset-grid">
-            {config.presets.map((preset) => (
-              <button key={preset.id} type="button" className="preset-btn" onClick={() => onApplyPreset(preset.id)}>
-                {preset.name}
-              </button>
-            ))}
-          </div>
-          <div className="recommend-row">
-            <select value={selectedThemeId} onChange={(event) => setSelectedThemeId(event.target.value)}>
-              {config.colorThemes.map((theme) => (
-                <option key={theme.id} value={theme.id}>{theme.name}</option>
-              ))}
-            </select>
-            <button type="button" className="preset-btn" onClick={onRecommendRandom}>おすすめ生成</button>
-          </div>
-        </section>
-
-        <section className="section-block">
-          <h2>出力 / 共有</h2>
-          <div className="save-row">
-            <input
-              value={fileNameInput}
-              onChange={(event) => setFileNameInput(event.target.value)}
-              type="text"
-              placeholder="案件名（任意）"
-            />
-            <button type="button" onClick={onSaveSuitPng} disabled={isSaving}>スーツ画像保存</button>
-          </div>
-          <div className="action-row">
-            <button type="button" className="share-btn" onClick={onSaveSpecPng} disabled={isSaving}>仕様書PNG</button>
-            <button type="button" className="share-btn" onClick={onPrintSpec}>印刷</button>
-            <button type="button" className="share-btn" onClick={onCopyUrl}>URLコピー</button>
-          </div>
-        </section>
+        {!isMobile ? (
+          <section className="section-block">
+            {menuSection}
+          </section>
+        ) : null}
       </main>
+
+      {isMobile && menuOpen ? (
+        <div className="mobile-menu-backdrop" onClick={() => setMenuOpen(false)}>
+          <aside className="mobile-menu" onClick={(event) => event.stopPropagation()}>
+            {menuSection}
+          </aside>
+        </div>
+      ) : null}
 
       <div className="toast-area" role="status" aria-live="polite">
         {toasts.map((toast) => (
@@ -561,3 +877,5 @@ function App(): JSX.Element {
 }
 
 export default App;
+
+

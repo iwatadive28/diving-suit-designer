@@ -1,6 +1,12 @@
 ﻿import type { AppConfig, Color, SuitState } from "../types";
 import { PART_DEFINITIONS, SUIT_SOURCE_SIZE } from "./partSpec";
 
+type PatternTile = {
+  width: number;
+  height: number;
+  data: Uint8ClampedArray;
+};
+
 type ComposerContext = {
   width: number;
   height: number;
@@ -8,6 +14,7 @@ type ComposerContext = {
   baseMask: Uint8Array;
   regionMap: Int16Array;
   partIndexById: Map<string, number>;
+  patternTiles: Map<string, PatternTile>;
 };
 
 type PartMask = {
@@ -18,6 +25,7 @@ type PartMask = {
 
 const LINE_SRC = "/assets/suits_alpha.png";
 const BASE_MASK_SRC = "/assets/default_image.png";
+const BASE_ALPHA = 236;
 
 let context: ComposerContext | null = null;
 
@@ -84,7 +92,6 @@ function buildRegionMap(baseMask: Uint8Array, partMasks: PartMask[]): Int16Array
   regionMap.fill(-1);
 
   const priorities = [...partMasks].sort((a, b) => {
-    // m19(膝パッド)は全体形状を含むため最終適用
     if (a.key === "m19") {
       return 1;
     }
@@ -115,11 +122,11 @@ function buildRegionMap(baseMask: Uint8Array, partMasks: PartMask[]): Int16Array
   return regionMap;
 }
 
-function resolveColor(id: string | undefined, colors: Color[], fallback = "#111111"): [number, number, number] {
+function resolveColor(id: string | undefined, colorsById: Map<string, Color>, fallback = "#111111"): [number, number, number] {
   if (!id) {
     return hexToRgb(fallback);
   }
-  const color = colors.find((item) => item.id === id);
+  const color = colorsById.get(id);
   return hexToRgb(color?.hex ?? fallback);
 }
 
@@ -131,9 +138,74 @@ function drawBackground(ctx: CanvasRenderingContext2D, width: number, height: nu
   ctx.fillRect(0, 0, width, height);
 }
 
-function buildPanelImageData(state: SuitState, colors: Color[], regionMap: Int16Array, baseMask: Uint8Array): ImageData {
+function imageToPatternTile(image: HTMLImageElement): PatternTile {
+  const canvas = document.createElement("canvas");
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return { width: 1, height: 1, data: new Uint8ClampedArray([0, 0, 0, 0]) };
+  }
+
+  ctx.drawImage(image, 0, 0);
+  const data = ctx.getImageData(0, 0, image.width, image.height).data;
+  return { width: image.width, height: image.height, data };
+}
+
+async function loadPatternTiles(colors: Color[]): Promise<Map<string, PatternTile>> {
+  const out = new Map<string, PatternTile>();
+
+  for (const color of colors) {
+    if (!color.patternTile) {
+      continue;
+    }
+
+    try {
+      const img = await loadImage(color.patternTile);
+      out.set(color.id, imageToPatternTile(img));
+    } catch (error) {
+      console.warn(`[pattern] 読み込み失敗: ${color.id} ${color.patternTile}`, error);
+    }
+  }
+
+  return out;
+}
+
+async function ensurePatternTiles(colors: Color[]): Promise<void> {
+  const current = ensureContext();
+  const toLoad = colors.filter((color) => color.patternTile && !current.patternTiles.has(color.id));
+  if (toLoad.length === 0) {
+    return;
+  }
+
+  const loaded = await loadPatternTiles(toLoad);
+  loaded.forEach((value, key) => {
+    current.patternTiles.set(key, value);
+  });
+}
+
+function samplePatternRgb(tile: PatternTile, x: number, y: number): [number, number, number, number] {
+  const tx = ((x % tile.width) + tile.width) % tile.width;
+  const ty = ((y % tile.height) + tile.height) % tile.height;
+  const p = (ty * tile.width + tx) * 4;
+  return [tile.data[p], tile.data[p + 1], tile.data[p + 2], tile.data[p + 3]];
+}
+
+function buildPanelImageData(
+  state: SuitState,
+  colors: Color[],
+  regionMap: Int16Array,
+  baseMask: Uint8Array,
+  patternTiles: Map<string, PatternTile>,
+): ImageData {
   const { width, height } = SUIT_SOURCE_SIZE;
   const image = new ImageData(width, height);
+  const colorsById = new Map(colors.map((color) => [color.id, color]));
+
+  const selectedByPart = PART_DEFINITIONS.map((part) => {
+    const colorId = state.parts[part.id] ?? part.defaultColor;
+    return colorsById.get(colorId);
+  });
 
   for (let i = 0; i < regionMap.length; i += 1) {
     if (!baseMask[i]) {
@@ -150,13 +222,27 @@ function buildPanelImageData(state: SuitState, colors: Color[], regionMap: Int16
       continue;
     }
 
-    const part = PART_DEFINITIONS[partIndex];
-    const selectedColorId = state.parts[part.id] ?? part.defaultColor;
-    const [r, g, b] = resolveColor(selectedColorId, colors);
+    const selectedColor = selectedByPart[partIndex];
+    const y = Math.floor(i / width);
+    const x = i - y * width;
+
+    if (selectedColor?.patternTile && patternTiles.has(selectedColor.id)) {
+      const tile = patternTiles.get(selectedColor.id);
+      if (tile) {
+        const [pr, pg, pb, pa] = samplePatternRgb(tile, x, y);
+        image.data[p] = pr;
+        image.data[p + 1] = pg;
+        image.data[p + 2] = pb;
+        image.data[p + 3] = Math.max(20, Math.round((pa / 255) * BASE_ALPHA));
+        continue;
+      }
+    }
+
+    const [r, g, b] = resolveColor(selectedColor?.id, colorsById);
     image.data[p] = r;
     image.data[p + 1] = g;
     image.data[p + 2] = b;
-    image.data[p + 3] = 236;
+    image.data[p + 3] = BASE_ALPHA;
   }
 
   return image;
@@ -208,22 +294,43 @@ function drawHighlight(target: CanvasRenderingContext2D, regionMap: Int16Array, 
   }
 
   const img = ctx.createImageData(width, height);
+  const strokeR = 98;
+  const strokeG = 206;
+  const strokeB = 255;
+
   for (let i = 0; i < regionMap.length; i += 1) {
     if (regionMap[i] !== selected) {
       continue;
     }
+
     const p = i * 4;
     img.data[p] = 255;
     img.data[p + 1] = 255;
     img.data[p + 2] = 255;
-    img.data[p + 3] = 28;
+    img.data[p + 3] = 56;
+
+    const x = i % width;
+    const y = Math.floor(i / width);
+    const left = x > 0 ? regionMap[i - 1] : -1;
+    const right = x < width - 1 ? regionMap[i + 1] : -1;
+    const top = y > 0 ? regionMap[i - width] : -1;
+    const bottom = y < height - 1 ? regionMap[i + width] : -1;
+
+    if (left !== selected || right !== selected || top !== selected || bottom !== selected) {
+      img.data[p] = strokeR;
+      img.data[p + 1] = strokeG;
+      img.data[p + 2] = strokeB;
+      img.data[p + 3] = 195;
+    }
   }
+
   ctx.putImageData(img, 0, 0);
   target.drawImage(overlay, 0, 0);
 }
 
-export async function initializeComposer(): Promise<void> {
+export async function initializeComposer(colors: Color[] = []): Promise<void> {
   if (context) {
+    await ensurePatternTiles(colors);
     return;
   }
 
@@ -254,10 +361,13 @@ export async function initializeComposer(): Promise<void> {
   const partIndexById = new Map<string, number>();
   PART_DEFINITIONS.forEach((part, index) => partIndexById.set(part.id, index));
 
-  context = { width, height, lineImage, baseMask, regionMap, partIndexById };
+  const patternTiles = await loadPatternTiles(colors);
+
+  context = { width, height, lineImage, baseMask, regionMap, partIndexById, patternTiles };
 }
 
 export async function renderPreview(state: SuitState, colors: Color[], stitchColors: Color[], size: number, selectedPartId: string | null): Promise<HTMLCanvasElement> {
+  await initializeComposer(colors);
   const current = ensureContext();
 
   const source = document.createElement("canvas");
@@ -269,7 +379,7 @@ export async function renderPreview(state: SuitState, colors: Color[], stitchCol
   }
 
   drawBackground(sourceCtx, current.width, current.height);
-  sourceCtx.putImageData(buildPanelImageData(state, colors, current.regionMap, current.baseMask), 0, 0);
+  sourceCtx.putImageData(buildPanelImageData(state, colors, current.regionMap, current.baseMask, current.patternTiles), 0, 0);
 
   const stitchId = state.stitchColor ?? "st_black";
   const stitchHex = stitchColors.find((item) => item.id === stitchId)?.hex ?? "#111111";

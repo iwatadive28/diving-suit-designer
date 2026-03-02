@@ -2,6 +2,7 @@
   id: string;
   name: string;
   hex: string;
+  patternTile?: string;
   enabled: boolean;
   order: number;
 };
