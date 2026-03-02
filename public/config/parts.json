@@ -1,0 +1,21 @@
+﻿[
+  { "id": "1", "name": "首周り", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "2", "name": "胸上部（前）", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "3", "name": "胸上部（後）", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "4", "name": "左肩", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "5", "name": "右肩", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "6", "name": "胸前", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "7", "name": "背中中央", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "8", "name": "胸下部・腹部・腕", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "9", "name": "背中下部", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "10", "name": "脇左右", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "11", "name": "下腹部", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "12", "name": "腹ライン左右", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "13", "name": "腰・臀部", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "14", "name": "腿前外左右", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "15", "name": "内股前後", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "16", "name": "膝パッド", "defaultColor": "white", "allowColors": ["white", "black"] },
+  { "id": "17", "name": "膝裏", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "18", "name": "脛・脹脛", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "19", "name": "裾", "defaultColor": "black", "allowColors": ["all"] }
+]

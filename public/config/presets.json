@@ -1,0 +1,77 @@
+﻿[
+  {
+    "id": "classic-black",
+    "name": "クラシックブラック",
+    "parts": {
+      "1": "black",
+      "2": "black",
+      "3": "black",
+      "4": "black",
+      "5": "black",
+      "6": "black",
+      "7": "black",
+      "8": "dark_gray",
+      "9": "dark_gray",
+      "10": "black",
+      "11": "black",
+      "12": "dark_gray",
+      "13": "black",
+      "14": "black",
+      "15": "dark_gray",
+      "16": "black",
+      "17": "dark_gray",
+      "18": "black",
+      "19": "black"
+    }
+  },
+  {
+    "id": "ocean-blue",
+    "name": "オーシャンブルー",
+    "parts": {
+      "1": "navy",
+      "2": "royal",
+      "3": "navy",
+      "4": "royal",
+      "5": "royal",
+      "6": "brilliant_blue",
+      "7": "france",
+      "8": "navy",
+      "9": "france",
+      "10": "turquoise",
+      "11": "navy",
+      "12": "turquoise",
+      "13": "navy",
+      "14": "royal",
+      "15": "france",
+      "16": "camo_black",
+      "17": "france",
+      "18": "navy",
+      "19": "camo_black"
+    }
+  },
+  {
+    "id": "warm-active",
+    "name": "ウォームアクティブ",
+    "parts": {
+      "1": "black",
+      "2": "orange",
+      "3": "red",
+      "4": "k_orange",
+      "5": "k_orange",
+      "6": "red",
+      "7": "orange",
+      "8": "brown",
+      "9": "olive",
+      "10": "red",
+      "11": "orange",
+      "12": "k_orange",
+      "13": "olive",
+      "14": "red",
+      "15": "orange",
+      "16": "black",
+      "17": "olive",
+      "18": "brown",
+      "19": "black"
+    }
+  }
+]
