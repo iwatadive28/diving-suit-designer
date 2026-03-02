@@ -22,48 +22,43 @@ select {
 }
 
 .app-shell {
-  width: min(1200px, 100% - 24px);
-  margin: 16px auto 40px;
+  width: min(1240px, 100% - 20px);
+  margin: 12px auto 34px;
 }
 
 .hero {
-  margin-bottom: 18px;
-  padding: 20px;
-  border-radius: 20px;
+  margin-bottom: 12px;
+  padding: 16px 18px;
+  border-radius: 16px;
   background: linear-gradient(130deg, rgba(35, 77, 152, 0.75), rgba(14, 22, 38, 0.9));
   border: 1px solid rgba(108, 165, 255, 0.35);
 }
 
 .hero-tag {
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.16em;
   color: #97c3ff;
-  margin: 0 0 10px;
+  margin: 0 0 8px;
 }
 
 .hero h1 {
   margin: 0;
-  font-size: clamp(20px, 4vw, 36px);
-}
-
-.hero p {
-  margin: 8px 0 0;
-  color: #d2e4ff;
+  font-size: clamp(20px, 3.8vw, 34px);
 }
 
 .layout-v2 {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .top-grid {
   display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1.45fr) minmax(240px, 0.75fr);
+  gap: 10px;
 }
 
 .section-block {
-  padding: 12px;
+  padding: 10px;
   border-radius: 14px;
   background: rgba(8, 14, 24, 0.78);
   border: 1px solid rgba(116, 165, 251, 0.22);
@@ -71,9 +66,37 @@ select {
 }
 
 .section-block h2 {
-  margin: 0 0 10px;
+  margin: 0;
   font-size: 15px;
   color: #c8e3ff;
+}
+
+.section-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.compact-toggle {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(126, 171, 237, 0.28);
+  color: #eff5ff;
+  background: rgba(20, 35, 56, 0.84);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.compact-toggle:hover {
+  border-color: rgba(117, 193, 255, 0.9);
+}
+
+.collapsed-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #c3dcf9;
 }
 
 .preview-canvas-wrap {
@@ -84,6 +107,7 @@ select {
   overflow: hidden;
   background: linear-gradient(180deg, #f3f6fb 0%, #e4ebf6 100%);
   border: 1px solid rgba(70, 100, 150, 0.35);
+  margin-top: 8px;
 }
 
 .preview-image {
@@ -92,6 +116,45 @@ select {
   object-fit: contain;
   display: block;
   cursor: crosshair;
+}
+
+.tap-palette {
+  position: absolute;
+  z-index: 8;
+  transform: translate(-50%, -50%);
+  width: min(220px, 70vw);
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(132, 185, 255, 0.55);
+  background: rgba(7, 14, 26, 0.95);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+.tap-palette-title {
+  font-size: 12px;
+  color: #d9edff;
+  margin-bottom: 6px;
+}
+
+.tap-palette-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.tap-color-btn {
+  border: 1px solid rgba(124, 166, 228, 0.25);
+  border-radius: 8px;
+  background: rgba(12, 22, 36, 0.75);
+  padding: 6px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.tap-color-btn.active {
+  border-color: #65b9ff;
+  box-shadow: 0 0 0 1px rgba(101, 185, 255, 0.33) inset;
 }
 
 .hint {
@@ -107,20 +170,29 @@ select {
 }
 
 .part-grid.long {
-  max-height: 280px;
+  max-height: 344px;
   overflow-y: auto;
+  padding-right: 2px;
 }
 
 .part-btn,
 .preset-btn,
 .share-btn,
 .save-row button {
-  padding: 10px 12px;
+  padding: 9px 10px;
   border-radius: 10px;
   border: 1px solid rgba(126, 171, 237, 0.28);
   color: #eff5ff;
   background: rgba(20, 35, 56, 0.84);
   cursor: pointer;
+}
+
+.part-btn {
+  text-align: left;
+  white-space: normal;
+  line-height: 1.35;
+  min-height: 42px;
+  word-break: break-word;
 }
 
 .part-btn.active,
@@ -135,6 +207,7 @@ select {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  margin-top: 8px;
 }
 
 .color-grid.stitch {
@@ -152,6 +225,7 @@ select {
   color: #eff5ff;
   padding: 8px 10px;
   cursor: pointer;
+  text-align: left;
 }
 
 .color-btn.active {
@@ -170,6 +244,7 @@ select {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+  margin-top: 8px;
 }
 
 .recommend-row {
@@ -191,6 +266,7 @@ select {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px;
+  margin-top: 8px;
 }
 
 .save-row input {
@@ -242,6 +318,10 @@ select {
     grid-template-columns: 1fr;
   }
 
+  .part-grid.long {
+    max-height: 220px;
+  }
+
   .preset-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -249,7 +329,11 @@ select {
 
 @media (max-width: 600px) {
   .app-shell {
-    width: calc(100% - 14px);
+    width: calc(100% - 10px);
+  }
+
+  .hero {
+    padding: 12px;
   }
 
   .color-grid,
@@ -258,5 +342,13 @@ select {
   .recommend-row,
   .save-row {
     grid-template-columns: 1fr;
+  }
+
+  .tap-palette {
+    width: min(250px, 86vw);
+  }
+
+  .tap-palette-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }

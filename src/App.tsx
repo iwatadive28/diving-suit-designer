@@ -8,12 +8,18 @@ import {
   renderPreview,
   renderSpecSheet,
 } from "./lib/suitComposer";
-import { PART_DEFINITIONS } from "./lib/partSpec";
 import { deserializeState, serializeState } from "./lib/stateCodec";
-import type { AppConfig, ColorTheme, SuitState, Toast } from "./types";
+import type { AppConfig, Color, ColorTheme, Part, SuitState, Toast } from "./types";
 
 const MAX_SHARE_URL_LENGTH = 2000;
 const RECENT_STORAGE_KEY = "recent_colors_v3";
+
+type PaletteState = {
+  open: boolean;
+  x: number;
+  y: number;
+  partId: string | null;
+};
 
 function createDefaultState(config: AppConfig): SuitState {
   const parts = Object.fromEntries(config.parts.map((part) => [part.id, part.defaultColor]));
@@ -21,6 +27,14 @@ function createDefaultState(config: AppConfig): SuitState {
     parts,
     stitchColor: config.stitchColors[0]?.id,
   };
+}
+
+function resolveSelectableColors(part: Part, allColors: Color[]): Color[] {
+  if (part.allowColors.includes("all")) {
+    return allColors;
+  }
+  const allowedSet = new Set(part.allowColors);
+  return allColors.filter((color) => allowedSet.has(color.id));
 }
 
 function readRecentColors(): string[] {
@@ -72,7 +86,9 @@ function sanitizeState(raw: SuitState, config: AppConfig): SuitState {
   const parts = Object.fromEntries(
     config.parts.map((part) => {
       const selected = raw.parts[part.id];
-      return [part.id, selected && colorSet.has(selected) ? selected : part.defaultColor];
+      const selectable = resolveSelectableColors(part, config.colors).map((color) => color.id);
+      const fallback = selectable.includes(part.defaultColor) ? part.defaultColor : selectable[0] ?? config.colors[0]?.id ?? "black";
+      return [part.id, selected && selectable.includes(selected) && colorSet.has(selected) ? selected : fallback];
     }),
   );
 
@@ -92,18 +108,18 @@ function pickRandom<T>(items: T[]): T {
 }
 
 function applyRandomRecommendation(theme: ColorTheme, config: AppConfig, state: SuitState): SuitState {
-  const partColors = theme.colors.length > 0
-    ? theme.colors
-    : config.colors.map((color) => color.id);
+  const nextParts: Record<string, string> = {};
+
+  config.parts.forEach((part) => {
+    const selectable = resolveSelectableColors(part, config.colors).map((color) => color.id);
+    const themed = theme.colors.filter((id) => selectable.includes(id));
+    const pool = themed.length > 0 ? themed : selectable;
+    nextParts[part.id] = pickRandom(pool);
+  });
 
   const stitchCandidates = (theme.stitchColors && theme.stitchColors.length > 0)
     ? theme.stitchColors
     : config.stitchColors.map((color) => color.id);
-
-  const nextParts: Record<string, string> = {};
-  config.parts.forEach((part) => {
-    nextParts[part.id] = pickRandom(partColors);
-  });
 
   return {
     ...state,
@@ -125,6 +141,8 @@ function App(): JSX.Element {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedThemeId, setSelectedThemeId] = useState<string>("");
+  const [partPanelCollapsed, setPartPanelCollapsed] = useState(false);
+  const [palette, setPalette] = useState<PaletteState>({ open: false, x: 50, y: 50, partId: null });
 
   const previewBoxRef = useRef<HTMLDivElement | null>(null);
   const previewSize = useMemo(() => choosePreviewSize(), []);
@@ -158,6 +176,7 @@ function App(): JSX.Element {
         setState(initial);
         setSelectedPartId(loaded.parts[0]?.id ?? "1");
         setSelectedThemeId(loaded.colorThemes[0]?.id ?? "");
+        setPartPanelCollapsed(window.matchMedia("(max-width: 960px)").matches);
       } catch (error) {
         setFatalError(error instanceof Error ? error.message : "初期化に失敗しました。");
       } finally {
@@ -222,19 +241,30 @@ function App(): JSX.Element {
   }
 
   const selectedPart = config.parts.find((part) => part.id === selectedPartId) ?? config.parts[0];
-  const colorIds = sortColorIdsByRecent(config.colors.map((color) => color.id), recentColors);
+  const selectableForSelected = resolveSelectableColors(selectedPart, config.colors);
+  const colorIds = sortColorIdsByRecent(selectableForSelected.map((color) => color.id), recentColors);
 
-  const onSelectColor = (colorId: string): void => {
+  const onSelectColor = (colorId: string, partId = selectedPart.id): void => {
+    const targetPart = config.parts.find((part) => part.id === partId) ?? selectedPart;
+    const selectable = resolveSelectableColors(targetPart, config.colors);
+    if (!selectable.find((color) => color.id === colorId)) {
+      addToast("この部位では選択できない色です。");
+      return;
+    }
+
     setState((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
         parts: {
           ...prev.parts,
-          [selectedPart.id]: colorId,
+          [targetPart.id]: colorId,
         },
       };
     });
+
+    setSelectedPartId(targetPart.id);
+    setPalette((prev) => ({ ...prev, open: false }));
 
     const nextRecents = [colorId, ...recentColors.filter((id) => id !== colorId)].slice(0, 8);
     setRecentColors(nextRecents);
@@ -262,6 +292,8 @@ function App(): JSX.Element {
         config,
       );
     });
+
+    setPalette((prev) => ({ ...prev, open: false }));
   };
 
   const onRecommendRandom = (): void => {
@@ -276,6 +308,7 @@ function App(): JSX.Element {
       return sanitizeState(applyRandomRecommendation(theme, config, prev), config);
     });
     addToast(`おすすめを生成しました: ${theme.name}`);
+    setPalette((prev) => ({ ...prev, open: false }));
   };
 
   const onPreviewClick = (event: MouseEvent<HTMLDivElement>): void => {
@@ -286,8 +319,25 @@ function App(): JSX.Element {
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     const picked = pickPartIdByDisplayPoint(x, y, rect.width, rect.height);
-    if (picked) setSelectedPartId(picked);
+
+    if (!picked) {
+      setPalette((prev) => ({ ...prev, open: false }));
+      return;
+    }
+
+    setSelectedPartId(picked);
+    setPalette({
+      open: true,
+      x: (x / rect.width) * 100,
+      y: (y / rect.height) * 100,
+      partId: picked,
+    });
   };
+
+  const palettePart = palette.partId
+    ? config.parts.find((part) => part.id === palette.partId) ?? selectedPart
+    : selectedPart;
+  const paletteColors = resolveSelectableColors(palettePart, config.colors);
 
   const shareUrl = `${window.location.origin}${window.location.pathname}?${serializeState(state)}`;
 
@@ -357,38 +407,76 @@ function App(): JSX.Element {
       <header className="hero">
         <p className="hero-tag">ORDER SHEET READY</p>
         <h1>セミドライスーツデザインシミュレーター</h1>
-        <p>19部位マスク優先 / スマホ対応 / 仕様書PNG・URL共有対応</p>
       </header>
 
       <main className="layout-v2">
         <section className="top-grid">
           <div className="section-block preview-panel">
-            <h2>デザインプレビュー（クリックで部位選択）</h2>
+            <h2>デザインプレビュー（画像タップで部位と色を選択）</h2>
             <div className="preview-canvas-wrap" ref={previewBoxRef} onClick={onPreviewClick} role="button" tabIndex={0}>
               {previewUrl ? <img src={previewUrl} className="preview-image" alt="スーツプレビュー" /> : null}
+              {palette.open ? (
+                <div
+                  className="tap-palette"
+                  style={{ left: `${palette.x}%`, top: `${palette.y}%` }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="tap-palette-title">{palettePart.name}</div>
+                  <div className="tap-palette-grid">
+                    {paletteColors.map((color) => (
+                      <button
+                        key={`tap-${palettePart.id}-${color.id}`}
+                        type="button"
+                        className={state.parts[palettePart.id] === color.id ? "tap-color-btn active" : "tap-color-btn"}
+                        onClick={() => onSelectColor(color.id, palettePart.id)}
+                        title={color.name}
+                        aria-label={color.name}
+                      >
+                        <span className="swatch" style={{ backgroundColor: color.hex }} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
             <p className="hint">選択中: {selectedPart.id}. {selectedPart.name}</p>
           </div>
 
           <div className="section-block part-panel">
-            <h2>選択部位（19部位）</h2>
-            <div className="part-grid long">
-              {PART_DEFINITIONS.map((part) => (
-                <button
-                  key={part.id}
-                  type="button"
-                  className={part.id === selectedPart.id ? "part-btn active" : "part-btn"}
-                  onClick={() => setSelectedPartId(part.id)}
-                >
-                  {part.id}. {part.name}
-                </button>
-              ))}
+            <div className="section-head-row">
+              <h2>選択部位（19部位）</h2>
+              <button
+                type="button"
+                className="compact-toggle"
+                onClick={() => setPartPanelCollapsed((prev) => !prev)}
+              >
+                {partPanelCollapsed ? "開く" : "閉じる"}
+              </button>
             </div>
+            {!partPanelCollapsed ? (
+              <div className="part-grid long">
+                {config.parts.map((part) => (
+                  <button
+                    key={part.id}
+                    type="button"
+                    className={part.id === selectedPart.id ? "part-btn active" : "part-btn"}
+                    onClick={() => {
+                      setSelectedPartId(part.id);
+                      setPalette((prev) => ({ ...prev, open: false }));
+                    }}
+                  >
+                    {part.id}. {part.name}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="collapsed-note">プレビューをタップして部位選択できます。</p>
+            )}
           </div>
         </section>
 
         <section className="section-block">
-          <h2>パネルカラー一覧</h2>
+          <h2>パネルカラー一覧（{selectedPart.name}）</h2>
           <div className="color-grid">
             {colorIds.map((colorId) => {
               const color = config.colors.find((item) => item.id === colorId);
