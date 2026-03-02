@@ -1,0 +1,262 @@
+﻿:root {
+  color-scheme: dark;
+  font-family: "Space Grotesk", "Noto Sans JP", sans-serif;
+  background: radial-gradient(circle at 20% 20%, #1e2b42 0%, #0a0f18 55%, #06090f 100%);
+  color: #eff5ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: transparent;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.app-shell {
+  width: min(1200px, 100% - 24px);
+  margin: 16px auto 40px;
+}
+
+.hero {
+  margin-bottom: 18px;
+  padding: 20px;
+  border-radius: 20px;
+  background: linear-gradient(130deg, rgba(35, 77, 152, 0.75), rgba(14, 22, 38, 0.9));
+  border: 1px solid rgba(108, 165, 255, 0.35);
+}
+
+.hero-tag {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: #97c3ff;
+  margin: 0 0 10px;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(20px, 4vw, 36px);
+}
+
+.hero p {
+  margin: 8px 0 0;
+  color: #d2e4ff;
+}
+
+.layout-v2 {
+  display: grid;
+  gap: 12px;
+}
+
+.top-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 12px;
+}
+
+.section-block {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(8, 14, 24, 0.78);
+  border: 1px solid rgba(116, 165, 251, 0.22);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3);
+}
+
+.section-block h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: #c8e3ff;
+}
+
+.preview-canvas-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 14px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #f3f6fb 0%, #e4ebf6 100%);
+  border: 1px solid rgba(70, 100, 150, 0.35);
+}
+
+.preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  cursor: crosshair;
+}
+
+.hint {
+  margin: 8px 2px 0;
+  color: #c3dcf9;
+  font-size: 13px;
+}
+
+.part-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.part-grid.long {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.part-btn,
+.preset-btn,
+.share-btn,
+.save-row button {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(126, 171, 237, 0.28);
+  color: #eff5ff;
+  background: rgba(20, 35, 56, 0.84);
+  cursor: pointer;
+}
+
+.part-btn.active,
+.preset-btn:hover,
+.share-btn:hover,
+.save-row button:hover {
+  border-color: rgba(117, 193, 255, 0.9);
+  box-shadow: 0 0 0 1px rgba(117, 193, 255, 0.3) inset;
+}
+
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.color-grid.stitch {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.color-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(124, 166, 228, 0.25);
+  border-radius: 10px;
+  background: rgba(12, 22, 36, 0.75);
+  color: #eff5ff;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.color-btn.active {
+  border-color: #65b9ff;
+  background: rgba(21, 47, 77, 0.78);
+}
+
+.swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.recommend-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.recommend-row select {
+  border: 1px solid rgba(125, 162, 214, 0.4);
+  border-radius: 10px;
+  background: rgba(5, 11, 20, 0.8);
+  color: #f6fbff;
+  padding: 8px 10px;
+}
+
+.save-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.save-row input {
+  border: 1px solid rgba(125, 162, 214, 0.4);
+  border-radius: 10px;
+  background: rgba(5, 11, 20, 0.8);
+  color: #f6fbff;
+  padding: 8px 10px;
+}
+
+.action-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.toast-area {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  display: grid;
+  gap: 8px;
+  z-index: 20;
+}
+
+.toast {
+  border: 1px solid rgba(134, 188, 255, 0.4);
+  border-radius: 10px;
+  background: rgba(15, 31, 50, 0.92);
+  color: #d7ecff;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.loading,
+.fatal {
+  width: min(620px, 100% - 24px);
+  margin: 10vh auto;
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px solid rgba(110, 167, 242, 0.35);
+  background: rgba(8, 16, 30, 0.84);
+  color: #e9f4ff;
+}
+
+@media (max-width: 960px) {
+  .top-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .preset-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .app-shell {
+    width: calc(100% - 14px);
+  }
+
+  .color-grid,
+  .action-row,
+  .preset-grid,
+  .recommend-row,
+  .save-row {
+    grid-template-columns: 1fr;
+  }
+}

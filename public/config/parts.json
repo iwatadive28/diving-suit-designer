@@ -1,0 +1,11 @@
+[
+  { "id": "parts1", "name": "腕", "mask": "/images/parts1/blue.png", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "parts2", "name": "上半身", "mask": "/images/parts2/blue.png", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "fastener", "name": "ファスナー", "mask": "/images/fastener/black.png", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "waist", "name": "腰", "mask": "/images/waist/blue.png", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "crotch", "name": "また", "mask": "/images/crotch/blue.png", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "thigh", "name": "もも", "mask": "/images/thigh/blue.png", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "kneespad", "name": "膝パッド", "mask": "/images/kneespad/black.png", "defaultColor": "white", "allowColors": ["black", "white"] },
+  { "id": "knees", "name": "膝裏", "mask": "/images/knees/blue.png", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "calf", "name": "ひざ下", "mask": "/images/calf/blue.png", "defaultColor": "black", "allowColors": ["all"] }
+]

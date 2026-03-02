@@ -1,0 +1,20 @@
+﻿[
+  {
+    "id": "warm",
+    "name": "ウォーム",
+    "colors": ["red", "orange", "k_orange", "k_yellow", "brown", "olive", "sand", "candy_pink"],
+    "stitchColors": ["st_red", "st_orange", "st_k_yellow", "st_brown", "st_pink", "st_safari"]
+  },
+  {
+    "id": "cool",
+    "name": "クール",
+    "colors": ["navy", "royal", "brilliant_blue", "france", "turquoise", "mint", "camo_black", "silver_gray"],
+    "stitchColors": ["st_navy", "st_royal", "st_cyan", "st_powder_blue", "st_cool_gray", "st_dark_gray"]
+  },
+  {
+    "id": "mono",
+    "name": "モノトーン",
+    "colors": ["black", "white", "dark_gray", "silver_gray", "melange_bk"],
+    "stitchColors": ["st_black", "st_white", "st_cool_gray", "st_dark_gray"]
+  }
+]

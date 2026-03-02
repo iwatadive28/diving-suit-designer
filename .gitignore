@@ -32,3 +32,7 @@ build/
 # その他不要な一時ファイル
 *.log
 *.tmp
+
+# 参照用画像作業フォルダ（Git管理外）
+reference/gimp_work/
+reference/image/

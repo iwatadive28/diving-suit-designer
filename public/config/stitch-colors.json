@@ -1,0 +1,22 @@
+﻿[
+  { "id": "st_black", "name": "ブラック", "hex": "#111111", "enabled": true, "order": 10 },
+  { "id": "st_white", "name": "ホワイト", "hex": "#f3f4f5", "enabled": true, "order": 20 },
+  { "id": "st_cool_gray", "name": "クールグレイ", "hex": "#9da2aa", "enabled": true, "order": 30 },
+  { "id": "st_dark_gray", "name": "ダークグレイ", "hex": "#52545e", "enabled": true, "order": 40 },
+  { "id": "st_orange", "name": "オレンジ", "hex": "#f28c21", "enabled": true, "order": 50 },
+  { "id": "st_powder_blue", "name": "パウダー", "hex": "#8aa7dc", "enabled": true, "order": 60 },
+  { "id": "st_wine", "name": "ワイン", "hex": "#632548", "enabled": true, "order": 70 },
+  { "id": "st_k_yellow", "name": "Kイエロー", "hex": "#d2c11f", "enabled": true, "order": 80 },
+  { "id": "st_red", "name": "レッド", "hex": "#d41f2a", "enabled": true, "order": 90 },
+  { "id": "st_navy", "name": "ネイビー", "hex": "#1a2e62", "enabled": true, "order": 100 },
+  { "id": "st_royal", "name": "ロイヤル", "hex": "#2453d6", "enabled": true, "order": 110 },
+  { "id": "st_camel_orange", "name": "キャメル/オレンジ", "hex": "#b26a35", "enabled": true, "order": 120 },
+  { "id": "st_cyan", "name": "シアン", "hex": "#1cb9c9", "enabled": true, "order": 130 },
+  { "id": "st_brown", "name": "ブラウン", "hex": "#694b33", "enabled": true, "order": 140 },
+  { "id": "st_baby_pink", "name": "ベビーピンク", "hex": "#e9a8bc", "enabled": true, "order": 150 },
+  { "id": "st_pastel_green", "name": "パステルグリーン", "hex": "#8ed0ac", "enabled": true, "order": 160 },
+  { "id": "st_green", "name": "緑", "hex": "#2f7a42", "enabled": true, "order": 170 },
+  { "id": "st_pink", "name": "ピンク", "hex": "#de5aa1", "enabled": true, "order": 180 },
+  { "id": "st_deep_green", "name": "グリーン", "hex": "#225735", "enabled": true, "order": 190 },
+  { "id": "st_safari", "name": "サファリ", "hex": "#61503a", "enabled": true, "order": 200 }
+]
