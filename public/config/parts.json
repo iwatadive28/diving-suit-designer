@@ -1,5 +1,5 @@
 ﻿[
-  { "id": "1", "name": "首周り", "defaultColor": "black", "allowColors": ["all"] },
+  { "id": "1", "name": "首周り", "defaultColor": "black", "allowColors": ["black"] },
   { "id": "2", "name": "胸上部（前）", "defaultColor": "black", "allowColors": ["all"] },
   { "id": "3", "name": "胸上部（後）", "defaultColor": "black", "allowColors": ["all"] },
   { "id": "4", "name": "左肩", "defaultColor": "black", "allowColors": ["all"] },
@@ -17,5 +17,6 @@
   { "id": "16", "name": "膝パッド", "defaultColor": "white", "allowColors": ["white", "black"] },
   { "id": "17", "name": "膝裏", "defaultColor": "black", "allowColors": ["all"] },
   { "id": "18", "name": "脛・脹脛", "defaultColor": "black", "allowColors": ["all"] },
-  { "id": "19", "name": "裾", "defaultColor": "black", "allowColors": ["all"] }
+  { "id": "19", "name": "裾", "defaultColor": "black", "allowColors": ["black"] },
+  { "id": "20", "name": "リブ", "defaultColor": "black", "allowColors": ["black"] }
 ]

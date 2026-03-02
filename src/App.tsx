@@ -4,7 +4,9 @@
   useRef,
   useState,
   type MouseEvent,
+  type PointerEvent,
   type TouchEvent,
+  type WheelEvent,
 } from "react";
 import { loadConfig } from "./lib/config";
 import { choosePreviewSize } from "./lib/perf";
@@ -218,6 +220,10 @@ function distance(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
+function isFixedBlackPart(part: Part): boolean {
+  return part.allowColors.length === 1 && part.allowColors[0] === "black";
+}
+
 function App(): JSX.Element {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -250,6 +256,10 @@ function App(): JSX.Element {
     pinchStartZoom: 1,
     lastTapAt: 0,
   });
+  const pointerPanRef = useRef({ active: false, pointerId: -1, lastX: 0, lastY: 0, moved: false });
+  const suppressClickRef = useRef(false);
+  const zoomRef = useRef(1);
+  const panRef = useRef({ x: 0, y: 0 });
 
   const previewSize = useMemo(() => choosePreviewSize(), []);
 
@@ -287,7 +297,8 @@ function App(): JSX.Element {
 
         setConfig(loaded);
         setState(initial);
-        setSelectedPartId(loaded.parts[0]?.id ?? "1");
+        const firstSelectable = loaded.parts.find((part) => !isFixedBlackPart(part));
+        setSelectedPartId(firstSelectable?.id ?? loaded.parts[0]?.id ?? "1");
         setSelectedThemeId(loaded.colorThemes[0]?.id ?? "");
         setPartPanelCollapsed(window.matchMedia("(max-width: 960px)").matches);
       } catch (error) {
@@ -340,6 +351,11 @@ function App(): JSX.Element {
   }, [config, state, previewSize, selectedPartId]);
 
   useEffect(() => {
+    zoomRef.current = zoom;
+    panRef.current = { x: panX, y: panY };
+  }, [zoom, panX, panY]);
+
+  useEffect(() => {
     if (!palette.open || !paletteRef.current || !previewBoxRef.current) return;
 
     const paletteEl = paletteRef.current;
@@ -370,11 +386,16 @@ function App(): JSX.Element {
   }
 
   const selectedPart = config.parts.find((part) => part.id === selectedPartId) ?? config.parts[0];
+  const selectableParts = config.parts.filter((part) => !isFixedBlackPart(part));
   const selectableForSelected = resolveSelectableColors(selectedPart, config.colors);
   const colorIds = sortColorIdsByRecent(selectableForSelected.map((color) => color.id), recentColors);
 
   const openPaletteAt = (anchor: Point, partId: string): void => {
     const part = config.parts.find((item) => item.id === partId) ?? selectedPart;
+    if (isFixedBlackPart(part)) {
+      setPalette((prev) => ({ ...prev, open: false }));
+      return;
+    }
     const colors = resolveSelectableColors(part, config.colors);
     const box = previewBoxRef.current;
     if (!box) return;
@@ -393,6 +414,10 @@ function App(): JSX.Element {
 
   const onSelectColor = (colorId: string, partId = selectedPart.id): void => {
     const targetPart = config.parts.find((part) => part.id === partId) ?? selectedPart;
+    if (isFixedBlackPart(targetPart)) {
+      addToast(`${targetPart.name}はブラック固定です。`);
+      return;
+    }
     const selectable = resolveSelectableColors(targetPart, config.colors);
     if (!selectable.find((color) => color.id === colorId)) {
       addToast("この部位では選択できない色です。");
@@ -493,12 +518,28 @@ function App(): JSX.Element {
       return;
     }
 
+    const pickedPart = config.parts.find((part) => part.id === picked);
+    if (pickedPart && isFixedBlackPart(pickedPart)) {
+      addToast(`${pickedPart.name}はブラック固定です。`);
+      setPalette((prev) => ({ ...prev, open: false }));
+      return;
+    }
+
     setSelectedPartId(picked);
     setStitchPaletteOpen(false);
     openPaletteAt(screenPoint, picked);
   };
 
   const onPreviewClick = (event: MouseEvent<HTMLDivElement>): void => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    if (palette.open || stitchPaletteOpen) {
+      setPalette((prev) => ({ ...prev, open: false }));
+      setStitchPaletteOpen(false);
+      return;
+    }
     const box = previewBoxRef.current;
     if (!box) return;
 
@@ -513,6 +554,9 @@ function App(): JSX.Element {
   };
 
   const onPreviewTouchStart = (event: TouchEvent<HTMLDivElement>): void => {
+    if ((event.target as HTMLElement).closest(".tap-palette, .stitch-overlay, .stitch-overlay-palette")) {
+      return;
+    }
     const rt = touchRuntimeRef.current;
 
     if (event.touches.length === 2) {
@@ -611,6 +655,84 @@ function App(): JSX.Element {
     rt.moved = false;
   };
 
+  const onPreviewPointerDown = (event: PointerEvent<HTMLDivElement>): void => {
+    if (isMobile) return;
+    if (event.pointerType !== "mouse" || event.button !== 0 || zoomRef.current <= 1) return;
+    if ((event.target as HTMLElement).closest(".tap-palette, .stitch-overlay, .stitch-overlay-palette")) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    pointerPanRef.current = {
+      active: true,
+      pointerId: event.pointerId,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      moved: false,
+    };
+  };
+
+  const onPreviewPointerMove = (event: PointerEvent<HTMLDivElement>): void => {
+    if (isMobile) return;
+    const box = previewBoxRef.current;
+    if (!box) return;
+    const rt = pointerPanRef.current;
+    if (!rt.active || rt.pointerId !== event.pointerId) return;
+    const dx = event.clientX - rt.lastX;
+    const dy = event.clientY - rt.lastY;
+    rt.lastX = event.clientX;
+    rt.lastY = event.clientY;
+    if (Math.abs(dx) + Math.abs(dy) > 1) {
+      rt.moved = true;
+      suppressClickRef.current = true;
+    }
+    const rect = box.getBoundingClientRect();
+    const nextPan = clampPan(
+      panRef.current.x + dx,
+      panRef.current.y + dy,
+      zoomRef.current,
+      { width: rect.width, height: rect.height },
+    );
+    panRef.current = nextPan;
+    setPanX(nextPan.x);
+    setPanY(nextPan.y);
+  };
+
+  const onPreviewPointerUp = (event: PointerEvent<HTMLDivElement>): void => {
+    const rt = pointerPanRef.current;
+    if (rt.pointerId === event.pointerId) {
+      rt.active = false;
+      rt.pointerId = -1;
+    }
+  };
+
+  const onPreviewWheel = (event: WheelEvent<HTMLDivElement>): void => {
+    if (isMobile) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const box = previewBoxRef.current;
+    if (!box) return;
+    const step = event.ctrlKey ? 0.2 : 0.1;
+    const direction = event.deltaY > 0 ? -1 : 1;
+    const nextZoom = clamp(zoomRef.current + direction * step, MIN_ZOOM, MAX_ZOOM);
+    const rect = box.getBoundingClientRect();
+    const nextPan = clampPan(panRef.current.x, panRef.current.y, nextZoom, { width: rect.width, height: rect.height });
+    setZoom(nextZoom);
+    setPanX(nextPan.x);
+    setPanY(nextPan.y);
+    panRef.current = nextPan;
+  };
+
+  const zoomBy = (delta: number): void => {
+    const box = previewBoxRef.current;
+    if (!box) return;
+    const nextZoom = clamp(zoomRef.current + delta, MIN_ZOOM, MAX_ZOOM);
+    const rect = box.getBoundingClientRect();
+    const nextPan = clampPan(panRef.current.x, panRef.current.y, nextZoom, { width: rect.width, height: rect.height });
+    setZoom(nextZoom);
+    setPanX(nextPan.x);
+    setPanY(nextPan.y);
+    panRef.current = nextPan;
+  };
+
   const palettePart = palette.partId
     ? config.parts.find((part) => part.id === palette.partId) ?? selectedPart
     : selectedPart;
@@ -672,10 +794,17 @@ function App(): JSX.Element {
         addToast("ポップアップを許可してください。");
         return;
       }
-      win.document.write(`<html><body style=\"margin:0\"><img src=\"${url}\" style=\"width:100%\" /></body></html>`);
+      win.document.write(
+        `<html><body style="margin:0"><img id="spec-image" src="${url}" style="width:100%" />
+        <script>
+          const img = document.getElementById("spec-image");
+          if (img) {
+            img.onload = () => { window.focus(); window.print(); };
+          }
+        </script></body></html>`,
+      );
       win.document.close();
       win.focus();
-      win.print();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
       setMenuOpen(false);
     } catch (error) {
@@ -751,6 +880,11 @@ function App(): JSX.Element {
               className="preview-canvas-wrap"
               ref={previewBoxRef}
               onClick={onPreviewClick}
+              onWheel={onPreviewWheel}
+                onPointerDown={onPreviewPointerDown}
+                onPointerMove={onPreviewPointerMove}
+                onPointerUp={onPreviewPointerUp}
+                onPointerCancel={onPreviewPointerUp}
               onTouchStart={onPreviewTouchStart}
               onTouchMove={onPreviewTouchMove}
               onTouchEnd={onPreviewTouchEnd}
@@ -763,6 +897,8 @@ function App(): JSX.Element {
               <div
                 className="stitch-overlay"
                 onClick={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+                onTouchStart={(event) => event.stopPropagation()}
               >
                 <button
                   type="button"
@@ -780,7 +916,11 @@ function App(): JSX.Element {
                   />
                 </button>
                 {stitchPaletteOpen ? (
-                  <div className="stitch-overlay-palette">
+                  <div
+                    className="stitch-overlay-palette"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onTouchStart={(event) => event.stopPropagation()}
+                  >
                     {config.stitchColors.map((stitch) => (
                       <button
                         key={`overlay-${stitch.id}`}
@@ -802,6 +942,8 @@ function App(): JSX.Element {
                   className="tap-palette"
                   style={{ left: `${palette.x}px`, top: `${palette.y}px` }}
                   onClick={(event) => event.stopPropagation()}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onTouchStart={(event) => event.stopPropagation()}
                 >
                   <div className="tap-palette-title">{palettePart.name}</div>
                   <div className="tap-palette-grid">
@@ -821,13 +963,22 @@ function App(): JSX.Element {
                 </div>
               ) : null}
             </div>
+            {!isMobile ? (
+              <div className="preview-zoom-controls">
+                <button type="button" className="compact-toggle" onClick={() => zoomBy(-0.2)}>-</button>
+                <button type="button" className="compact-toggle" onClick={() => { setZoom(1); setPanX(0); setPanY(0); panRef.current = { x: 0, y: 0 }; }}>
+                  {Math.round(zoom * 100)}%
+                </button>
+                <button type="button" className="compact-toggle" onClick={() => zoomBy(0.2)}>+</button>
+              </div>
+            ) : null}
             <p className="hint">選択中: {selectedPart ? `${selectedPart.id}. ${selectedPart.name}` : "未選択"}</p>
-            <p className="hint zoom">ズーム: {zoom.toFixed(2)}x（2本指ピンチ / 1本指ドラッグ / ダブルタップで戻す）</p>
+            {isMobile ? <p className="hint zoom">ズーム: {zoom.toFixed(2)}x（2本指ピンチ / 1本指ドラッグ / ダブルタップで戻す）</p> : null}
           </div>
 
           <div className="section-block part-panel">
             <div className="section-head-row">
-              <h2>選択部位（19部位）</h2>
+              <h2>選択部位（{selectableParts.length}部位）</h2>
               <button
                 type="button"
                 className="compact-toggle"
@@ -838,7 +989,7 @@ function App(): JSX.Element {
             </div>
             {!partPanelCollapsed ? (
               <div className="part-grid long">
-                {config.parts.map((part) => (
+                {selectableParts.map((part) => (
                   <button
                     key={part.id}
                     type="button"

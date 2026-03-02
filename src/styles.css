@@ -141,6 +141,12 @@ select {
   border: 1px solid rgba(70, 100, 150, 0.35);
   margin-top: 8px;
   touch-action: none;
+  overscroll-behavior: contain;
+  cursor: grab;
+}
+
+.preview-canvas-wrap:active {
+  cursor: grabbing;
 }
 
 .preview-transform {
@@ -241,6 +247,12 @@ select {
   margin: 8px 2px 0;
   color: #c3dcf9;
   font-size: 13px;
+}
+
+.preview-zoom-controls {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
 }
 
 .hint.zoom {

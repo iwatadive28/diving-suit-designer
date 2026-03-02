@@ -55,6 +55,7 @@ npm run test
 ## 仕様ドキュメント
 - `docs/persona.md`
 - `docs/workflow-19parts-mobile.md`
+- `docs/netlify-quickstart-5min.md`
 
 ## ライセンス
 MIT
