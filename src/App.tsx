@@ -237,6 +237,7 @@ function App(): JSX.Element {
   const [zoom, setZoom] = useState(1);
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
+  const [stitchPaletteOpen, setStitchPaletteOpen] = useState(false);
 
   const previewBoxRef = useRef<HTMLDivElement | null>(null);
   const paletteRef = useRef<HTMLDivElement | null>(null);
@@ -464,6 +465,7 @@ function App(): JSX.Element {
     });
     addToast(`おすすめを生成しました: ${theme.name}`);
     setPalette((prev) => ({ ...prev, open: false }));
+    setStitchPaletteOpen(false);
     setMenuOpen(false);
   };
 
@@ -473,6 +475,7 @@ function App(): JSX.Element {
       return sanitizeState(buildBlackState(config, prev), config);
     });
     setPalette((prev) => ({ ...prev, open: false }));
+    setStitchPaletteOpen(false);
     addToast("全身をブラックにリセットしました。");
     setMenuOpen(false);
   };
@@ -491,6 +494,7 @@ function App(): JSX.Element {
     }
 
     setSelectedPartId(picked);
+    setStitchPaletteOpen(false);
     openPaletteAt(screenPoint, picked);
   };
 
@@ -501,6 +505,11 @@ function App(): JSX.Element {
     const rect = box.getBoundingClientRect();
     const screenPoint = { x: event.clientX - rect.left, y: event.clientY - rect.top };
     handlePreviewTapPoint(screenPoint);
+  };
+
+  const onSelectStitchColor = (stitchId: string): void => {
+    setState((prev) => (prev ? { ...prev, stitchColor: stitchId } : prev));
+    setStitchPaletteOpen(false);
   };
 
   const onPreviewTouchStart = (event: TouchEvent<HTMLDivElement>): void => {
@@ -675,6 +684,7 @@ function App(): JSX.Element {
   };
 
   const titleText = isMobile ? "セミドライスーツシミュレーター" : "セミドライスーツデザインシミュレーター";
+  const selectedStitch = config.stitchColors.find((stitch) => stitch.id === state.stitchColor) ?? config.stitchColors[0];
 
   const menuSection = (
     <>
@@ -695,6 +705,7 @@ function App(): JSX.Element {
           </select>
           <button type="button" className="preset-btn" onClick={onRecommendRandom}>おすすめ生成</button>
         </div>
+        <button type="button" className="danger-btn inline-reset" onClick={onResetBlack}>全身ブラックにリセット</button>
       </div>
 
       <div className="menu-section">
@@ -715,9 +726,6 @@ function App(): JSX.Element {
         </div>
       </div>
 
-      <div className="menu-section">
-        <button type="button" className="danger-btn" onClick={onResetBlack}>全身ブラックにリセット</button>
-      </div>
     </>
   );
 
@@ -751,6 +759,42 @@ function App(): JSX.Element {
             >
               <div className="preview-transform" style={{ transform: `translate(${panX}px, ${panY}px) scale(${zoom})` }}>
                 {previewUrl ? <img src={previewUrl} className="preview-image" alt="スーツプレビュー" /> : null}
+              </div>
+              <div
+                className="stitch-overlay"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  className="stitch-toggle"
+                  onClick={() => {
+                    setStitchPaletteOpen((prev) => !prev);
+                    setPalette((prev) => ({ ...prev, open: false }));
+                  }}
+                >
+                  <span>ステッチ</span>
+                  <span
+                    className="stitch-dot"
+                    style={{ backgroundColor: selectedStitch?.hex ?? "#111111" }}
+                    aria-label={`選択中ステッチ: ${selectedStitch?.name ?? "未選択"}`}
+                  />
+                </button>
+                {stitchPaletteOpen ? (
+                  <div className="stitch-overlay-palette">
+                    {config.stitchColors.map((stitch) => (
+                      <button
+                        key={`overlay-${stitch.id}`}
+                        type="button"
+                        className={state.stitchColor === stitch.id ? "tap-color-btn active" : "tap-color-btn"}
+                        onClick={() => onSelectStitchColor(stitch.id)}
+                        title={stitch.name}
+                        aria-label={stitch.name}
+                      >
+                        <span className="swatch" style={{ backgroundColor: stitch.hex }} />
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               {palette.open ? (
                 <div
