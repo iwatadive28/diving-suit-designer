@@ -101,8 +101,6 @@ function buildRegionMap(baseMask: Uint8Array, partMasks: PartMask[]): Int16Array
     return areaOf(a.data) - areaOf(b.data);
   });
 
-  const fallback = partMasks.find((mask) => mask.key === "m19")?.partIndex ?? 0;
-
   for (let i = 0; i < baseMask.length; i += 1) {
     if (!baseMask[i]) {
       continue;
@@ -116,7 +114,7 @@ function buildRegionMap(baseMask: Uint8Array, partMasks: PartMask[]): Int16Array
       }
     }
 
-    regionMap[i] = hit >= 0 ? hit : fallback;
+    regionMap[i] = hit;
   }
 
   return regionMap;

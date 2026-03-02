@@ -3,7 +3,7 @@
 export const SUIT_SOURCE_SIZE = { width: 1104, height: 960 };
 
 export const PART_DEFINITIONS: Part[] = [
-  { id: "1", name: "首周り", defaultColor: "black", allowColors: ["all"], originalRef: "m01" },
+  { id: "1", name: "首周り", defaultColor: "black", allowColors: ["black"], originalRef: "m01" },
   { id: "2", name: "胸上部（前）", defaultColor: "black", allowColors: ["all"], originalRef: "m02" },
   { id: "3", name: "胸上部（後）", defaultColor: "black", allowColors: ["all"], originalRef: "m03" },
   { id: "4", name: "左肩", defaultColor: "black", allowColors: ["all"], originalRef: "m05" },
@@ -18,8 +18,9 @@ export const PART_DEFINITIONS: Part[] = [
   { id: "13", name: "腰・臀部", defaultColor: "black", allowColors: ["all"], originalRef: "m10" },
   { id: "14", name: "腿前外左右", defaultColor: "black", allowColors: ["all"], originalRef: "m14" },
   { id: "15", name: "内股前後", defaultColor: "black", allowColors: ["all"], originalRef: "m15" },
-  { id: "16", name: "膝パッド", defaultColor: "black", allowColors: ["all"], originalRef: "m19" },
+  { id: "16", name: "膝パッド", defaultColor: "white", allowColors: ["white", "black"], originalRef: "m19" },
   { id: "17", name: "膝裏", defaultColor: "black", allowColors: ["all"], originalRef: "m16" },
   { id: "18", name: "脛・脹脛", defaultColor: "black", allowColors: ["all"], originalRef: "m17" },
-  { id: "19", name: "裾", defaultColor: "black", allowColors: ["all"], originalRef: "m18" }
+  { id: "19", name: "裾", defaultColor: "black", allowColors: ["black"], originalRef: "m18" },
+  { id: "20", name: "リブ", defaultColor: "black", allowColors: ["black"], originalRef: "m20" }
 ];
