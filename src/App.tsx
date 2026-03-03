@@ -21,12 +21,23 @@ import {
 import { deserializeState, serializeState } from "./lib/stateCodec";
 import type { AppConfig, Color, ColorTheme, Part, SuitState, Toast } from "./types";
 
-const MAX_SHARE_URL_LENGTH = 2000;
 const RECENT_STORAGE_KEY = "recent_colors_v3";
+const FILENAME_STORAGE_KEY = "suit_filename_v1";
+const DRAFT_STORAGE_KEY = "suit_draft_v1";
+const SHORT_SHARE_STORAGE_KEY = "short_share_entries_v1";
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
 const HISTORY_LIMIT = 50;
 const NON_SELECTABLE_PART_IDS = new Set(["1", "19", "20"]);
+
+type VariantKey = "A" | "B";
+
+type ShareEntry = {
+  id: string;
+  state: SuitState;
+  readonly: boolean;
+  expiresAt?: string;
+};
 
 type PaletteState = {
   open: boolean;
@@ -76,6 +87,90 @@ function readRecentColors(): string[] {
 
 function writeRecentColors(ids: string[]): void {
   sessionStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(ids.slice(0, 8)));
+}
+
+function readStoredFileName(): string {
+  try {
+    return localStorage.getItem(FILENAME_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeStoredFileName(value: string): void {
+  try {
+    localStorage.setItem(FILENAME_STORAGE_KEY, value);
+  } catch {
+    // no-op
+  }
+}
+
+function readDraftState(): { state: SuitState; savedAt: string } | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { state?: SuitState; savedAt?: string };
+    if (!parsed?.state || typeof parsed.savedAt !== "string") return null;
+    return { state: parsed.state, savedAt: parsed.savedAt };
+  } catch {
+    return null;
+  }
+}
+
+function writeDraftState(state: SuitState): void {
+  try {
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({
+      state,
+      savedAt: new Date().toISOString(),
+    }));
+  } catch {
+    // no-op
+  }
+}
+
+function readShortShareEntries(): ShareEntry[] {
+  try {
+    const raw = localStorage.getItem(SHORT_SHARE_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as ShareEntry[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeShortShareEntries(entries: ShareEntry[]): void {
+  try {
+    localStorage.setItem(SHORT_SHARE_STORAGE_KEY, JSON.stringify(entries.slice(-200)));
+  } catch {
+    // no-op
+  }
+}
+
+function createShareId(): string {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+async function copyTextWithFallback(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const el = document.createElement("textarea");
+      el.value = text;
+      el.setAttribute("readonly", "true");
+      el.style.position = "fixed";
+      el.style.left = "-9999px";
+      document.body.appendChild(el);
+      el.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(el);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
 }
 
 function todayLabel(): string {
@@ -261,8 +356,15 @@ function App(): JSX.Element {
   const [stitchPaletteOpen, setStitchPaletteOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [hoverPartId, setHoverPartId] = useState<string | null>(null);
+  const [activeVariant, setActiveVariant] = useState<VariantKey>("A");
+  const [variantStates, setVariantStates] = useState<Record<VariantKey, SuitState | null>>({ A: null, B: null });
   const [pastStates, setPastStates] = useState<SuitState[]>([]);
   const [futureStates, setFutureStates] = useState<SuitState[]>([]);
+  const [readOnlyMode, setReadOnlyMode] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<string>("");
+  const [bootMs, setBootMs] = useState<number | null>(null);
+  const [shareExpiryHours, setShareExpiryHours] = useState<number>(24);
+  const [copyFallbackText, setCopyFallbackText] = useState<string>("");
 
   const previewBoxRef = useRef<HTMLDivElement | null>(null);
   const paletteRef = useRef<HTMLDivElement | null>(null);
@@ -302,7 +404,21 @@ function App(): JSX.Element {
   }, []);
 
   useEffect(() => {
+    writeStoredFileName(fileNameInput);
+  }, [fileNameInput]);
+
+  useEffect(() => {
+    if (!state) return;
+    const timer = window.setTimeout(() => {
+      writeDraftState(state);
+      setDraftSavedAt(new Date().toISOString());
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [state]);
+
+  useEffect(() => {
     let alive = true;
+    const bootStartedAt = performance.now();
 
     async function boot(): Promise<void> {
       try {
@@ -311,17 +427,65 @@ function App(): JSX.Element {
         await initializeComposer(loaded.colors);
         if (!alive) return;
 
-        const parsed = deserializeState(window.location.search);
-        const initial = parsed ? sanitizeState(parsed, loaded) : createDefaultState(loaded);
+        const params = new URLSearchParams(window.location.search.startsWith("?") ? window.location.search.slice(1) : window.location.search);
+        const sid = params.get("sid");
+        const mode = params.get("mode");
+
+        let restored: SuitState | null = null;
+        if (sid) {
+          const entries = readShortShareEntries();
+          const entry = entries.find((item) => item.id === sid) ?? null;
+          if (entry) {
+            if (entry.expiresAt && Date.now() > new Date(entry.expiresAt).getTime()) {
+              addToast("共有リンクの有効期限が切れています。");
+            } else {
+              restored = sanitizeState(entry.state, loaded);
+              if (entry.readonly) {
+                setReadOnlyMode(true);
+              }
+            }
+          } else {
+            addToast("短縮共有データが見つかりません。");
+          }
+        }
+
+        if (mode === "view") {
+          setReadOnlyMode(true);
+        }
+
+        if (!restored) {
+          const parsed = deserializeState(window.location.search);
+          if (parsed) {
+            restored = sanitizeState(parsed, loaded);
+          }
+        }
+
+        if (!restored) {
+          const draft = readDraftState();
+          if (draft) {
+            restored = sanitizeState(draft.state, loaded);
+            setDraftSavedAt(draft.savedAt);
+          }
+        }
+
+        const initial = restored ?? createDefaultState(loaded);
 
         setConfig(loaded);
         setState(initial);
+        setVariantStates({ A: initial, B: initial });
+        setActiveVariant("A");
         setPastStates([]);
         setFutureStates([]);
         const firstEditable = loaded.parts.find((part) => !NON_SELECTABLE_PART_IDS.has(part.id))?.id ?? loaded.parts[0]?.id ?? "1";
         setSelectedPartId(firstEditable);
         setSelectedThemeId(loaded.colorThemes[0]?.id ?? "");
         setPartPanelCollapsed(window.matchMedia("(max-width: 960px)").matches);
+        setFileNameInput(readStoredFileName());
+        const elapsed = Math.round(performance.now() - bootStartedAt);
+        setBootMs(elapsed);
+        if (elapsed > 2000) {
+          console.warn(`[perf] app_boot_ms=${elapsed}`);
+        }
       } catch (error) {
         setFatalError(error instanceof Error ? error.message : "初期化に失敗しました。");
       } finally {
@@ -417,7 +581,20 @@ function App(): JSX.Element {
   }, [state, pastStates, futureStates]);
 
   if (loading) {
-    return <div className="loading">読み込み中...</div>;
+    return (
+      <div className="loading skeleton">
+        <div className="skeleton-line w40" />
+        <div className="skeleton-line w70" />
+        <div className="skeleton-panel" />
+        <div className="skeleton-line w55" />
+        <div className="skeleton-grid">
+          <div className="skeleton-chip" />
+          <div className="skeleton-chip" />
+          <div className="skeleton-chip" />
+          <div className="skeleton-chip" />
+        </div>
+      </div>
+    );
   }
 
   if (!config || !state || fatalError) {
@@ -437,6 +614,10 @@ function App(): JSX.Element {
   const colorIds = sortColorIdsByRecent(selectableForSelected.map((color) => color.id), recentColors);
 
   const commitState = (updater: (prev: SuitState) => SuitState): void => {
+    if (readOnlyMode) {
+      addToast("閲覧専用リンクのため編集できません。");
+      return;
+    }
     setState((prev) => {
       if (!prev) return prev;
       const next = sanitizeState(updater(prev), config);
@@ -445,6 +626,7 @@ function App(): JSX.Element {
       }
       setPastStates((history) => [...history, prev].slice(-HISTORY_LIMIT));
       setFutureStates([]);
+      setVariantStates((current) => ({ ...current, [activeVariant]: next }));
       return next;
     });
   };
@@ -454,6 +636,7 @@ function App(): JSX.Element {
     const previous = pastStates[pastStates.length - 1];
     setPastStates((history) => history.slice(0, -1));
     setFutureStates((history) => [state, ...history].slice(0, HISTORY_LIMIT));
+    setVariantStates((current) => ({ ...current, [activeVariant]: previous }));
     setState(previous);
   };
 
@@ -462,7 +645,21 @@ function App(): JSX.Element {
     const [next, ...rest] = futureStates;
     setFutureStates(rest);
     setPastStates((history) => [...history, state].slice(-HISTORY_LIMIT));
+    setVariantStates((current) => ({ ...current, [activeVariant]: next }));
     setState(next);
+  };
+
+  const onSwitchVariant = (nextVariant: VariantKey): void => {
+    if (nextVariant === activeVariant) return;
+    const nextState = variantStates[nextVariant];
+    if (!nextState) return;
+    if (state) {
+      setVariantStates((current) => ({ ...current, [activeVariant]: state }));
+    }
+    setActiveVariant(nextVariant);
+    setState(nextState);
+    setPastStates([]);
+    setFutureStates([]);
   };
 
   const openPaletteAt = (anchor: Point, partId: string): void => {
@@ -814,19 +1011,48 @@ function App(): JSX.Element {
 
   const shareUrl = `${window.location.origin}${window.location.pathname}?${serializeState(state)}`;
 
-  const onCopyUrl = async (): Promise<void> => {
-    if (shareUrl.length > MAX_SHARE_URL_LENGTH) {
-      addToast("URLが長すぎるためコピーできません。設定数を減らしてください。");
+  const createShortShareUrl = (readonly: boolean): string => {
+    const expiresAt = shareExpiryHours > 0
+      ? new Date(Date.now() + shareExpiryHours * 60 * 60 * 1000).toISOString()
+      : undefined;
+    const entry: ShareEntry = {
+      id: createShareId(),
+      state,
+      readonly,
+      expiresAt,
+    };
+    const entries = [...readShortShareEntries(), entry];
+    writeShortShareEntries(entries);
+    const params = new URLSearchParams();
+    params.set("sid", entry.id);
+    if (readonly) {
+      params.set("mode", "view");
+    }
+    return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+  };
+
+  const onCopyEditableLink = async (): Promise<void> => {
+    const url = createShortShareUrl(false);
+    const ok = await copyTextWithFallback(url);
+    if (ok) {
+      addToast("編集リンクをコピーしました。");
+      setMenuOpen(false);
       return;
     }
+    setCopyFallbackText(url);
+    addToast("コピーに失敗したため、手動コピーしてください。");
+  };
 
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      addToast("共有URLをコピーしました。");
+  const onCopyReadonlyLink = async (): Promise<void> => {
+    const url = createShortShareUrl(true);
+    const ok = await copyTextWithFallback(url);
+    if (ok) {
+      addToast("閲覧専用リンクをコピーしました。");
       setMenuOpen(false);
-    } catch {
-      addToast("URLコピーに失敗しました。");
+      return;
     }
+    setCopyFallbackText(url);
+    addToast("コピーに失敗したため、手動コピーしてください。");
   };
 
   const onSaveSuitPng = async (): Promise<void> => {
@@ -916,6 +1142,12 @@ function App(): JSX.Element {
   const heroTagText = "ORDER SHEET READY";
   const previewTitleText = isMobile ? "デザインプレビュー（タップで部位選択）" : "デザインプレビュー（画像タップで部位と色を選択）";
   const selectedStitch = config.stitchColors.find((stitch) => stitch.id === state.stitchColor) ?? config.stitchColors[0];
+  const diffCount = (() => {
+    const a = variantStates.A;
+    const b = variantStates.B;
+    if (!a || !b) return 0;
+    return config.parts.reduce((count, part) => (a.parts[part.id] !== b.parts[part.id] ? count + 1 : count), 0);
+  })();
 
   const menuSection = (
     <>
@@ -948,12 +1180,21 @@ function App(): JSX.Element {
             type="text"
             placeholder="案件名（任意）"
           />
-          <button type="button" onClick={onSaveSuitPng} disabled={isSaving}>{isMobile ? "画像を保存（共有）" : "スーツ画像保存"}</button>
+          <button type="button" onClick={onSaveSuitPng} disabled={isSaving}>スーツ画像保存</button>
         </div>
         <div className="action-row">
           <button type="button" className="share-btn" onClick={onSaveSpecPng} disabled={isSaving}>仕様書PNG</button>
           <button type="button" className="share-btn" onClick={onPrintSpec}>印刷</button>
-          <button type="button" className="share-btn" onClick={onCopyUrl}>URLコピー</button>
+          <button type="button" className="share-btn" onClick={onCopyEditableLink}>編集リンクをコピー</button>
+        </div>
+        <div className="recommend-row">
+          <select value={String(shareExpiryHours)} onChange={(event) => setShareExpiryHours(Number(event.target.value))}>
+            <option value="1">1時間で期限切れ</option>
+            <option value="24">24時間で期限切れ</option>
+            <option value="168">7日で期限切れ</option>
+            <option value="0">期限なし</option>
+          </select>
+          <button type="button" className="share-btn" onClick={onCopyReadonlyLink}>閲覧専用リンクをコピー</button>
         </div>
       </div>
 
@@ -1010,7 +1251,27 @@ function App(): JSX.Element {
       <main className="layout-v2">
         <section className="top-grid">
           <div className="section-block preview-panel">
-            <h2>{previewTitleText}</h2>
+            <div className="section-head-row">
+              <h2>{previewTitleText}</h2>
+              <div className="ab-toggle-row">
+                <button
+                  type="button"
+                  className={activeVariant === "A" ? "compact-toggle active-variant" : "compact-toggle"}
+                  onClick={() => onSwitchVariant("A")}
+                  aria-label="A案"
+                >
+                  A案
+                </button>
+                <button
+                  type="button"
+                  className={activeVariant === "B" ? "compact-toggle active-variant" : "compact-toggle"}
+                  onClick={() => onSwitchVariant("B")}
+                  aria-label="B案"
+                >
+                  B案
+                </button>
+              </div>
+            </div>
             <div
               className="preview-canvas-wrap"
               ref={previewBoxRef}
@@ -1132,6 +1393,9 @@ function App(): JSX.Element {
             ) : null}
             <p className="hint">選択中: {selectedPart ? `${editableDisplayIndex.get(selectedPart.id) ?? selectedPart.id}. ${selectedPart.name}` : "未選択"}</p>
             <p className="hint">候補: {hoverPartId ? `${config.parts.find((part) => part.id === hoverPartId)?.name ?? "未選択"}${NON_SELECTABLE_PART_IDS.has(hoverPartId) ? "（固定）" : ""}` : "未選択"}</p>
+            <p className="hint">比較モード: {activeVariant}案（A/B差分 {diffCount}部位）</p>
+            {draftSavedAt ? <p className="hint">下書き保存: {new Date(draftSavedAt).toLocaleString()}</p> : null}
+            {bootMs !== null ? <p className="hint">初期表示: {bootMs}ms</p> : null}
             {isMobile ? <p className="hint zoom">ズーム: {zoom.toFixed(2)}x（2本指ピンチ / 1本指ドラッグ / ダブルタップで戻す）</p> : null}
           </div>
 
@@ -1248,7 +1512,7 @@ function App(): JSX.Element {
               <h3>保存・共有（目的別）</h3>
               <ul>
                 <li>画像で見せたい: 「スーツ画像保存」</li>
-                <li>同じデザインを後で開きたい: 「URLコピー」</li>
+                <li>同じデザインを後で開きたい: 「編集リンクをコピー」</li>
                 <li>注文内容として渡したい: 「仕様書PNG」</li>
                 <li>紙で確認・提出したい: 「印刷」</li>
               </ul>
@@ -1262,6 +1526,24 @@ function App(): JSX.Element {
                 <li>ロゴ編集は現在停止中です。</li>
               </ul>
             </section>
+          </aside>
+        </div>
+      ) : null}
+
+      {copyFallbackText ? (
+        <div className="help-backdrop" onClick={() => setCopyFallbackText("")}>
+          <aside className="help-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="help-header">
+              <h2>手動コピー</h2>
+              <button type="button" className="compact-toggle" onClick={() => setCopyFallbackText("")}>閉じる</button>
+            </div>
+            <p>下のリンクを長押ししてコピーしてください。</p>
+            <textarea
+              readOnly
+              value={copyFallbackText}
+              style={{ width: "100%", minHeight: "120px", marginTop: "10px", borderRadius: "10px", padding: "10px" }}
+              onFocus={(event) => event.currentTarget.select()}
+            />
           </aside>
         </div>
       ) : null}

@@ -21,6 +21,10 @@ select {
   font: inherit;
 }
 
+button {
+  min-height: 44px;
+}
+
 .app-shell {
   width: min(1240px, 100% - 20px);
   margin: 12px auto 34px;
@@ -84,6 +88,12 @@ select {
   white-space: nowrap;
 }
 
+.active-variant {
+  border-color: rgba(117, 193, 255, 0.95);
+  box-shadow: 0 0 0 1px rgba(117, 193, 255, 0.34) inset;
+  background: rgba(22, 48, 79, 0.94);
+}
+
 .icon-toggle {
   width: 32px;
   min-width: 32px;
@@ -114,7 +124,7 @@ select {
 .section-block h2 {
   margin: 0;
   font-size: 15px;
-  color: #c8e3ff;
+  color: #ddf0ff;
 }
 
 .menu-section + .menu-section {
@@ -135,6 +145,12 @@ select {
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 8px;
+}
+
+.ab-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .compact-toggle {
@@ -598,6 +614,45 @@ select {
   color: #e9f4ff;
 }
 
+.skeleton .skeleton-line,
+.skeleton .skeleton-panel,
+.skeleton .skeleton-chip {
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(72, 94, 127, 0.35), rgba(116, 151, 201, 0.42), rgba(72, 94, 127, 0.35));
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite linear;
+}
+
+.skeleton-line {
+  height: 18px;
+  margin-bottom: 10px;
+}
+
+.skeleton-line.w40 { width: 40%; }
+.skeleton-line.w55 { width: 55%; }
+.skeleton-line.w70 { width: 70%; }
+
+.skeleton-panel {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  margin: 8px 0 12px;
+}
+
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.skeleton-chip {
+  height: 44px;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 @media (max-width: 960px) {
   .top-grid {
     grid-template-columns: 1fr;
@@ -650,6 +705,16 @@ select {
     width: 30px;
     font-size: 17px;
     padding: 0;
+  }
+
+  .ab-toggle-row {
+    gap: 4px;
+  }
+
+  .ab-toggle-row .compact-toggle {
+    min-height: 36px;
+    padding: 0 8px;
+    font-size: 12px;
   }
 
   .section-block h2 {
