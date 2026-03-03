@@ -25,6 +25,7 @@ const MAX_SHARE_URL_LENGTH = 2000;
 const RECENT_STORAGE_KEY = "recent_colors_v3";
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
+const HISTORY_LIMIT = 50;
 const NON_SELECTABLE_PART_IDS = new Set(["1", "19", "20"]);
 
 type PaletteState = {
@@ -234,6 +235,10 @@ function swatchStyle(color: Color): CSSProperties {
   };
 }
 
+function areStatesEqual(a: SuitState, b: SuitState): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 function App(): JSX.Element {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -256,6 +261,8 @@ function App(): JSX.Element {
   const [stitchPaletteOpen, setStitchPaletteOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [hoverPartId, setHoverPartId] = useState<string | null>(null);
+  const [pastStates, setPastStates] = useState<SuitState[]>([]);
+  const [futureStates, setFutureStates] = useState<SuitState[]>([]);
 
   const previewBoxRef = useRef<HTMLDivElement | null>(null);
   const paletteRef = useRef<HTMLDivElement | null>(null);
@@ -309,6 +316,8 @@ function App(): JSX.Element {
 
         setConfig(loaded);
         setState(initial);
+        setPastStates([]);
+        setFutureStates([]);
         const firstEditable = loaded.parts.find((part) => !NON_SELECTABLE_PART_IDS.has(part.id))?.id ?? loaded.parts[0]?.id ?? "1";
         setSelectedPartId(firstEditable);
         setSelectedThemeId(loaded.colorThemes[0]?.id ?? "");
@@ -384,6 +393,29 @@ function App(): JSX.Element {
     }
   }, [palette.open, palette.x, palette.y, selectedPartId]);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) {
+        return;
+      }
+      const cmdOrCtrl = event.metaKey || event.ctrlKey;
+      if (!cmdOrCtrl) return;
+      if (event.key.toLowerCase() === "z" && !event.shiftKey) {
+        event.preventDefault();
+        onUndo();
+      } else if (event.key.toLowerCase() === "z" && event.shiftKey) {
+        event.preventDefault();
+        onRedo();
+      } else if (event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        onRedo();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [state, pastStates, futureStates]);
+
   if (loading) {
     return <div className="loading">読み込み中...</div>;
   }
@@ -403,6 +435,35 @@ function App(): JSX.Element {
   const selectedPart = editableParts.find((part) => part.id === selectedPartId) ?? editableParts[0] ?? config.parts[0];
   const selectableForSelected = resolveSelectableColors(selectedPart, config.colors);
   const colorIds = sortColorIdsByRecent(selectableForSelected.map((color) => color.id), recentColors);
+
+  const commitState = (updater: (prev: SuitState) => SuitState): void => {
+    setState((prev) => {
+      if (!prev) return prev;
+      const next = sanitizeState(updater(prev), config);
+      if (areStatesEqual(prev, next)) {
+        return prev;
+      }
+      setPastStates((history) => [...history, prev].slice(-HISTORY_LIMIT));
+      setFutureStates([]);
+      return next;
+    });
+  };
+
+  const onUndo = (): void => {
+    if (!state || pastStates.length === 0) return;
+    const previous = pastStates[pastStates.length - 1];
+    setPastStates((history) => history.slice(0, -1));
+    setFutureStates((history) => [state, ...history].slice(0, HISTORY_LIMIT));
+    setState(previous);
+  };
+
+  const onRedo = (): void => {
+    if (!state || futureStates.length === 0) return;
+    const [next, ...rest] = futureStates;
+    setFutureStates(rest);
+    setPastStates((history) => [...history, state].slice(-HISTORY_LIMIT));
+    setState(next);
+  };
 
   const openPaletteAt = (anchor: Point, partId: string): void => {
     const part = config.parts.find((item) => item.id === partId) ?? selectedPart;
@@ -450,24 +511,14 @@ function App(): JSX.Element {
       return;
     }
 
-    setState((prev) => {
-      if (!prev) return prev;
-      const beforeStitch = prev.stitchColor;
-      const next: SuitState = {
-        ...prev,
-        parts: {
-          ...prev.parts,
-          [targetPart.id]: colorId,
-        },
-        stitchColor: prev.stitchColor,
-      };
-
-      if (window.location.hostname === "localhost" && next.stitchColor !== beforeStitch) {
-        console.warn("パネル色変更でステッチ色が変化しました。処理を確認してください。");
-      }
-
-      return next;
-    });
+    commitState((prev) => ({
+      ...prev,
+      parts: {
+        ...prev.parts,
+        [targetPart.id]: colorId,
+      },
+      stitchColor: prev.stitchColor,
+    }));
 
     setSelectedPartId(targetPart.id);
     setPalette((prev) => ({ ...prev, open: false }));
@@ -484,20 +535,14 @@ function App(): JSX.Element {
       return;
     }
 
-    setState((prev) => {
-      if (!prev) return prev;
-      return sanitizeState(
-        {
-          ...prev,
-          preset: preset.id,
-          parts: {
-            ...prev.parts,
-            ...preset.parts,
-          },
-        },
-        config,
-      );
-    });
+    commitState((prev) => ({
+      ...prev,
+      preset: preset.id,
+      parts: {
+        ...prev.parts,
+        ...preset.parts,
+      },
+    }));
 
     setPalette((prev) => ({ ...prev, open: false }));
     setMenuOpen(false);
@@ -510,10 +555,7 @@ function App(): JSX.Element {
       return;
     }
 
-    setState((prev) => {
-      if (!prev) return prev;
-      return sanitizeState(applyRandomRecommendation(theme, config, prev), config);
-    });
+    commitState((prev) => applyRandomRecommendation(theme, config, prev));
     addToast(`おすすめを生成しました: ${theme.name}`);
     setPalette((prev) => ({ ...prev, open: false }));
     setStitchPaletteOpen(false);
@@ -521,10 +563,7 @@ function App(): JSX.Element {
   };
 
   const onResetBlack = (): void => {
-    setState((prev) => {
-      if (!prev) return prev;
-      return sanitizeState(buildBlackState(config, prev), config);
-    });
+    commitState((prev) => buildBlackState(config, prev));
     setPalette((prev) => ({ ...prev, open: false }));
     setStitchPaletteOpen(false);
     addToast("全身をブラックにリセットしました。");
@@ -570,7 +609,7 @@ function App(): JSX.Element {
   };
 
   const onSelectStitchColor = (stitchId: string): void => {
-    setState((prev) => (prev ? { ...prev, stitchColor: stitchId } : prev));
+    commitState((prev) => ({ ...prev, stitchColor: stitchId }));
     setStitchPaletteOpen(false);
   };
 
@@ -795,10 +834,36 @@ function App(): JSX.Element {
       setIsSaving(true);
       const blob = await exportPng(state, config.colors, config.stitchColors);
       const filename = fileNameInput.trim() ? `${fileNameInput.trim()}_suit.png` : `suit_${todayLabel()}.png`;
-      triggerDownload(blob, filename);
-      addToast("スーツ画像を保存しました。");
+
+      if (isMobile && typeof navigator.share === "function") {
+        const file = new File([blob], filename, { type: "image/png" });
+        const nav = navigator as Navigator & { canShare?: (data?: ShareData) => boolean };
+        const canShareFile = typeof nav.canShare === "function"
+          ? nav.canShare({ files: [file] })
+          : false;
+
+        if (canShareFile) {
+          await navigator.share({
+            title: "スーツ画像",
+            text: "スーツ画像を保存",
+            files: [file],
+          });
+          addToast("共有メニューを開きました。写真保存を選択してください。");
+        } else {
+          triggerDownload(blob, filename);
+          addToast("端末共有に未対応のためダウンロードしました。");
+        }
+      } else {
+        triggerDownload(blob, filename);
+        addToast("スーツ画像を保存しました。");
+      }
+
       setMenuOpen(false);
     } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        addToast("保存をキャンセルしました。");
+        return;
+      }
       addToast(error instanceof Error ? error.message : "画像保存に失敗しました。");
     } finally {
       setIsSaving(false);
@@ -848,6 +913,8 @@ function App(): JSX.Element {
   };
 
   const titleText = isMobile ? "セミドライスーツシミュレーター" : "セミドライスーツデザインシミュレーター";
+  const heroTagText = "ORDER SHEET READY";
+  const previewTitleText = isMobile ? "デザインプレビュー（タップで部位選択）" : "デザインプレビュー（画像タップで部位と色を選択）";
   const selectedStitch = config.stitchColors.find((stitch) => stitch.id === state.stitchColor) ?? config.stitchColors[0];
 
   const menuSection = (
@@ -881,7 +948,7 @@ function App(): JSX.Element {
             type="text"
             placeholder="案件名（任意）"
           />
-          <button type="button" onClick={onSaveSuitPng} disabled={isSaving}>スーツ画像保存</button>
+          <button type="button" onClick={onSaveSuitPng} disabled={isSaving}>{isMobile ? "画像を保存（共有）" : "スーツ画像保存"}</button>
         </div>
         <div className="action-row">
           <button type="button" className="share-btn" onClick={onSaveSpecPng} disabled={isSaving}>仕様書PNG</button>
@@ -897,8 +964,28 @@ function App(): JSX.Element {
     <div className="app-shell">
       <header className="hero">
         <div className="hero-head-row">
-          <p className="hero-tag">ORDER SHEET READY</p>
+          <p className="hero-tag">{heroTagText}</p>
           <div className="hero-actions">
+            <button
+              type="button"
+              className="menu-toggle help-toggle icon-toggle"
+              onClick={onUndo}
+              disabled={pastStates.length === 0}
+              aria-label="戻る"
+              title="戻る"
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              className="menu-toggle help-toggle icon-toggle"
+              onClick={onRedo}
+              disabled={futureStates.length === 0}
+              aria-label="進む"
+              title="進む"
+            >
+              →
+            </button>
             <button
               type="button"
               className="menu-toggle help-toggle"
@@ -923,7 +1010,7 @@ function App(): JSX.Element {
       <main className="layout-v2">
         <section className="top-grid">
           <div className="section-block preview-panel">
-            <h2>デザインプレビュー（画像タップで部位と色を選択）</h2>
+            <h2>{previewTitleText}</h2>
             <div
               className="preview-canvas-wrap"
               ref={previewBoxRef}
@@ -1112,7 +1199,7 @@ function App(): JSX.Element {
                 key={stitch.id}
                 type="button"
                 className={state.stitchColor === stitch.id ? "color-btn active" : "color-btn"}
-                onClick={() => setState((prev) => (prev ? { ...prev, stitchColor: stitch.id } : prev))}
+                onClick={() => onSelectStitchColor(stitch.id)}
               >
                 <span className="swatch" style={{ backgroundColor: stitch.hex }} />
                 <span>{stitch.name}</span>
