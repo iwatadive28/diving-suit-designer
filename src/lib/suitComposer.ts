@@ -434,8 +434,32 @@ export function pickPartIdByDisplayPoint(x: number, y: number, displayWidth: num
     return null;
   }
 
-  const srcX = Math.max(0, Math.min(current.width - 1, Math.floor((x / displayWidth) * current.width)));
-  const srcY = Math.max(0, Math.min(current.height - 1, Math.floor((y / displayHeight) * current.height)));
+  const srcAspect = current.width / current.height;
+  const displayAspect = displayWidth / displayHeight;
+
+  let drawnWidth = displayWidth;
+  let drawnHeight = displayHeight;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (displayAspect > srcAspect) {
+    drawnHeight = displayHeight;
+    drawnWidth = drawnHeight * srcAspect;
+    offsetX = (displayWidth - drawnWidth) / 2;
+  } else {
+    drawnWidth = displayWidth;
+    drawnHeight = drawnWidth / srcAspect;
+    offsetY = (displayHeight - drawnHeight) / 2;
+  }
+
+  const nx = (x - offsetX) / drawnWidth;
+  const ny = (y - offsetY) / drawnHeight;
+  if (nx < 0 || nx > 1 || ny < 0 || ny > 1) {
+    return null;
+  }
+
+  const srcX = Math.max(0, Math.min(current.width - 1, Math.floor(nx * current.width)));
+  const srcY = Math.max(0, Math.min(current.height - 1, Math.floor(ny * current.height)));
   const partIndex = current.regionMap[srcY * current.width + srcX];
   if (partIndex < 0) {
     return null;

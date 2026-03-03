@@ -255,6 +255,7 @@ function App(): JSX.Element {
   const [panY, setPanY] = useState(0);
   const [stitchPaletteOpen, setStitchPaletteOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [hoverPartId, setHoverPartId] = useState<string | null>(null);
 
   const previewBoxRef = useRef<HTMLDivElement | null>(null);
   const paletteRef = useRef<HTMLDivElement | null>(null);
@@ -341,12 +342,13 @@ function App(): JSX.Element {
 
     async function refreshPreview(): Promise<void> {
       try {
+        const highlightPartId = hoverPartId ?? selectedPartId;
         const canvas = await renderPreview(
           stateForPreview,
           panelColors,
           stitchColors,
           previewSize,
-          selectedPartId,
+          highlightPartId,
         );
         if (!alive) return;
         setPreviewUrl(canvas.toDataURL("image/png"));
@@ -359,7 +361,7 @@ function App(): JSX.Element {
     return () => {
       alive = false;
     };
-  }, [config, state, previewSize, selectedPartId]);
+  }, [config, state, previewSize, selectedPartId, hoverPartId]);
 
   useEffect(() => {
     zoomRef.current = zoom;
@@ -418,6 +420,26 @@ function App(): JSX.Element {
       y: clamped.y,
       partId,
     });
+  };
+
+  const pickPartFromViewportPoint = (screenPoint: Point): string | null => {
+    const box = previewBoxRef.current;
+    if (!box) return null;
+    const rect = box.getBoundingClientRect();
+    const srcPoint = toImageSpacePoint(screenPoint, zoomRef.current, panRef.current.x, panRef.current.y, {
+      width: rect.width,
+      height: rect.height,
+    });
+    return pickPartIdByDisplayPoint(srcPoint.x, srcPoint.y, rect.width, rect.height);
+  };
+
+  const updateHoverFromClient = (clientX: number, clientY: number): void => {
+    const box = previewBoxRef.current;
+    if (!box) return;
+    const rect = box.getBoundingClientRect();
+    const screenPoint = { x: clientX - rect.left, y: clientY - rect.top };
+    const picked = pickPartFromViewportPoint(screenPoint);
+    setHoverPartId(picked);
   };
 
   const onSelectColor = (colorId: string, partId = selectedPart.id): void => {
@@ -510,12 +532,7 @@ function App(): JSX.Element {
   };
 
   const handlePreviewTapPoint = (screenPoint: Point): void => {
-    const box = previewBoxRef.current;
-    if (!box) return;
-    const rect = box.getBoundingClientRect();
-
-    const srcPoint = toImageSpacePoint(screenPoint, zoomRef.current, panRef.current.x, panRef.current.y, { width: rect.width, height: rect.height });
-    const picked = pickPartIdByDisplayPoint(srcPoint.x, srcPoint.y, rect.width, rect.height);
+    const picked = pickPartFromViewportPoint(screenPoint);
 
     if (!picked) {
       setPalette((prev) => ({ ...prev, open: false }));
@@ -529,6 +546,7 @@ function App(): JSX.Element {
     }
 
     setSelectedPartId(picked);
+    setHoverPartId(picked);
     setStitchPaletteOpen(false);
     openPaletteAt(screenPoint, picked);
   };
@@ -599,6 +617,10 @@ function App(): JSX.Element {
       setPanX(clampedPan.x);
       setPanY(clampedPan.y);
       rt.moved = true;
+      const t = event.touches[0];
+      if (t) {
+        updateHoverFromClient(t.clientX, t.clientY);
+      }
       return;
     }
 
@@ -615,6 +637,7 @@ function App(): JSX.Element {
       const nextPan = clampPan(panX + dx, panY + dy, zoom, { width: rect.width, height: rect.height });
       setPanX(nextPan.x);
       setPanY(nextPan.y);
+      updateHoverFromClient(t.clientX, t.clientY);
       return;
     }
 
@@ -623,6 +646,7 @@ function App(): JSX.Element {
       if (Math.hypot(t.clientX - rt.lastX, t.clientY - rt.lastY) > 8) {
         rt.moved = true;
       }
+      updateHoverFromClient(t.clientX, t.clientY);
     }
   };
 
@@ -656,6 +680,7 @@ function App(): JSX.Element {
 
     rt.mode = "none";
     rt.moved = false;
+    setHoverPartId(null);
   };
 
   const onPreviewPointerDown = (event: PointerEvent<HTMLDivElement>): void => {
@@ -697,6 +722,13 @@ function App(): JSX.Element {
     panRef.current = nextPan;
     setPanX(nextPan.x);
     setPanY(nextPan.y);
+  };
+
+  const onPreviewPointerHover = (event: PointerEvent<HTMLDivElement>): void => {
+    if (isMobile) return;
+    const rt = pointerPanRef.current;
+    if (rt.active) return;
+    updateHoverFromClient(event.clientX, event.clientY);
   };
 
   const onPreviewPointerUp = (event: PointerEvent<HTMLDivElement>): void => {
@@ -897,10 +929,14 @@ function App(): JSX.Element {
               ref={previewBoxRef}
               onClick={onPreviewClick}
               onWheel={onPreviewWheel}
-                onPointerDown={onPreviewPointerDown}
-                onPointerMove={onPreviewPointerMove}
-                onPointerUp={onPreviewPointerUp}
-                onPointerCancel={onPreviewPointerUp}
+              onPointerDown={onPreviewPointerDown}
+              onPointerMove={(event) => {
+                onPreviewPointerMove(event);
+                onPreviewPointerHover(event);
+              }}
+              onPointerUp={onPreviewPointerUp}
+              onPointerCancel={onPreviewPointerUp}
+              onPointerLeave={() => setHoverPartId(null)}
               onTouchStart={onPreviewTouchStart}
               onTouchMove={onPreviewTouchMove}
               onTouchEnd={onPreviewTouchEnd}
@@ -1008,6 +1044,7 @@ function App(): JSX.Element {
               </div>
             ) : null}
             <p className="hint">選択中: {selectedPart ? `${editableDisplayIndex.get(selectedPart.id) ?? selectedPart.id}. ${selectedPart.name}` : "未選択"}</p>
+            <p className="hint">候補: {hoverPartId ? `${config.parts.find((part) => part.id === hoverPartId)?.name ?? "未選択"}${NON_SELECTABLE_PART_IDS.has(hoverPartId) ? "（固定）" : ""}` : "未選択"}</p>
             {isMobile ? <p className="hint zoom">ズーム: {zoom.toFixed(2)}x（2本指ピンチ / 1本指ドラッグ / ダブルタップで戻す）</p> : null}
           </div>
 
