@@ -254,6 +254,7 @@ function App(): JSX.Element {
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
   const [stitchPaletteOpen, setStitchPaletteOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   const previewBoxRef = useRef<HTMLDivElement | null>(null);
   const paletteRef = useRef<HTMLDivElement | null>(null);
@@ -865,11 +866,24 @@ function App(): JSX.Element {
       <header className="hero">
         <div className="hero-head-row">
           <p className="hero-tag">ORDER SHEET READY</p>
-          {isMobile ? (
-            <button type="button" className="menu-toggle" onClick={() => setMenuOpen((prev) => !prev)} aria-label="メニュー">
-              ☰
+          <div className="hero-actions">
+            <button
+              type="button"
+              className="menu-toggle help-toggle"
+              onClick={() => {
+                setIsHelpOpen(true);
+                setMenuOpen(false);
+              }}
+              aria-label="使い方"
+            >
+              使い方
             </button>
-          ) : null}
+            {isMobile ? (
+              <button type="button" className="menu-toggle" onClick={() => setMenuOpen((prev) => !prev)} aria-label="メニュー">
+                ☰
+              </button>
+            ) : null}
+          </div>
         </div>
         <h1>{titleText}</h1>
       </header>
@@ -1076,6 +1090,57 @@ function App(): JSX.Element {
           </section>
         ) : null}
       </main>
+
+      <footer className="app-footer" aria-label="コピーライト">
+        <img className="footer-icon-image" src="/assets/ペンギン_右向き.png" alt="ペンギンアイコン" />
+        <p>© 2026 kiws</p>
+        <p>このアプリはサンプルです。</p>
+      </footer>
+
+      {isHelpOpen ? (
+        <div className="help-backdrop" onClick={() => setIsHelpOpen(false)}>
+          <aside className="help-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="help-header">
+              <h2>使い方</h2>
+              <button type="button" className="compact-toggle" onClick={() => setIsHelpOpen(false)}>閉じる</button>
+            </div>
+
+            <section>
+              <h3>はじめてでも3分で色決め</h3>
+              <p>この画面だけで、スーツの色確認から保存・共有までできます。</p>
+            </section>
+
+            <section>
+              <h3>基本操作</h3>
+              <ol>
+                <li>スーツ画像をタップして、色を変えたい部位を選びます。</li>
+                <li>表示されたカラーパレットから色を選ぶと、すぐ反映されます。</li>
+                <li>右上の「ステッチ」から、縫い目の色を変更できます。</li>
+                <li>必要なら「おすすめ生成」や「全身ブラックにリセット」で全体を整えます。</li>
+              </ol>
+            </section>
+
+            <section>
+              <h3>保存・共有（目的別）</h3>
+              <ul>
+                <li>画像で見せたい: 「スーツ画像保存」</li>
+                <li>同じデザインを後で開きたい: 「URLコピー」</li>
+                <li>注文内容として渡したい: 「仕様書PNG」</li>
+                <li>紙で確認・提出したい: 「印刷」</li>
+              </ul>
+            </section>
+
+            <section>
+              <h3>注意点</h3>
+              <ul>
+                <li>首周り・裾・リブはブラック固定です。</li>
+                <li>膝パッドは白/黒のみ選べます。</li>
+                <li>ロゴ編集は現在停止中です。</li>
+              </ul>
+            </section>
+          </aside>
+        </div>
+      ) : null}
 
       {isMobile && menuOpen ? (
         <div className="mobile-menu-backdrop" onClick={() => setMenuOpen(false)}>
