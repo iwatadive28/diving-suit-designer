@@ -28,10 +28,17 @@ export type Preset = {
   parts: Record<string, string>;
 };
 
+export type LogoPlacement = {
+  id: string;
+  x: number;
+  y: number;
+};
+
 export type SuitState = {
   parts: Record<string, string>;
   preset?: string;
   stitchColor?: string;
+  logos?: LogoPlacement[];
 };
 
 export type AppConfig = {
