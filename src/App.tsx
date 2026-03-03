@@ -3,6 +3,7 @@
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type MouseEvent,
   type PointerEvent,
   type TouchEvent,
@@ -24,6 +25,7 @@ const MAX_SHARE_URL_LENGTH = 2000;
 const RECENT_STORAGE_KEY = "recent_colors_v3";
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
+const NON_SELECTABLE_PART_IDS = new Set(["1", "19", "20"]);
 
 type PaletteState = {
   open: boolean;
@@ -220,8 +222,16 @@ function distance(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-function isFixedBlackPart(part: Part): boolean {
-  return part.allowColors.length === 1 && part.allowColors[0] === "black";
+function swatchStyle(color: Color): CSSProperties {
+  if (!color.patternTile) {
+    return { backgroundColor: color.hex };
+  }
+  return {
+    backgroundColor: color.hex,
+    backgroundImage: `url(${color.patternTile})`,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+  };
 }
 
 function App(): JSX.Element {
@@ -297,8 +307,8 @@ function App(): JSX.Element {
 
         setConfig(loaded);
         setState(initial);
-        const firstSelectable = loaded.parts.find((part) => !isFixedBlackPart(part));
-        setSelectedPartId(firstSelectable?.id ?? loaded.parts[0]?.id ?? "1");
+        const firstEditable = loaded.parts.find((part) => !NON_SELECTABLE_PART_IDS.has(part.id))?.id ?? loaded.parts[0]?.id ?? "1";
+        setSelectedPartId(firstEditable);
         setSelectedThemeId(loaded.colorThemes[0]?.id ?? "");
         setPartPanelCollapsed(window.matchMedia("(max-width: 960px)").matches);
       } catch (error) {
@@ -385,17 +395,14 @@ function App(): JSX.Element {
     );
   }
 
-  const selectedPart = config.parts.find((part) => part.id === selectedPartId) ?? config.parts[0];
-  const selectableParts = config.parts.filter((part) => !isFixedBlackPart(part));
+  const editableParts = config.parts.filter((part) => !NON_SELECTABLE_PART_IDS.has(part.id));
+  const editableDisplayIndex = new Map(editableParts.map((part, index) => [part.id, index + 1]));
+  const selectedPart = editableParts.find((part) => part.id === selectedPartId) ?? editableParts[0] ?? config.parts[0];
   const selectableForSelected = resolveSelectableColors(selectedPart, config.colors);
   const colorIds = sortColorIdsByRecent(selectableForSelected.map((color) => color.id), recentColors);
 
   const openPaletteAt = (anchor: Point, partId: string): void => {
     const part = config.parts.find((item) => item.id === partId) ?? selectedPart;
-    if (isFixedBlackPart(part)) {
-      setPalette((prev) => ({ ...prev, open: false }));
-      return;
-    }
     const colors = resolveSelectableColors(part, config.colors);
     const box = previewBoxRef.current;
     if (!box) return;
@@ -414,10 +421,6 @@ function App(): JSX.Element {
 
   const onSelectColor = (colorId: string, partId = selectedPart.id): void => {
     const targetPart = config.parts.find((part) => part.id === partId) ?? selectedPart;
-    if (isFixedBlackPart(targetPart)) {
-      addToast(`${targetPart.name}はブラック固定です。`);
-      return;
-    }
     const selectable = resolveSelectableColors(targetPart, config.colors);
     if (!selectable.find((color) => color.id === colorId)) {
       addToast("この部位では選択できない色です。");
@@ -510,7 +513,7 @@ function App(): JSX.Element {
     if (!box) return;
     const rect = box.getBoundingClientRect();
 
-    const srcPoint = toImageSpacePoint(screenPoint, zoom, panX, panY, { width: rect.width, height: rect.height });
+    const srcPoint = toImageSpacePoint(screenPoint, zoomRef.current, panRef.current.x, panRef.current.y, { width: rect.width, height: rect.height });
     const picked = pickPartIdByDisplayPoint(srcPoint.x, srcPoint.y, rect.width, rect.height);
 
     if (!picked) {
@@ -518,10 +521,9 @@ function App(): JSX.Element {
       return;
     }
 
-    const pickedPart = config.parts.find((part) => part.id === picked);
-    if (pickedPart && isFixedBlackPart(pickedPart)) {
-      addToast(`${pickedPart.name}はブラック固定です。`);
+    if (NON_SELECTABLE_PART_IDS.has(picked)) {
       setPalette((prev) => ({ ...prev, open: false }));
+      addToast("この部位はブラック固定です。");
       return;
     }
 
@@ -554,7 +556,7 @@ function App(): JSX.Element {
   };
 
   const onPreviewTouchStart = (event: TouchEvent<HTMLDivElement>): void => {
-    if ((event.target as HTMLElement).closest(".tap-palette, .stitch-overlay, .stitch-overlay-palette")) {
+    if ((event.target as HTMLElement).closest(".tap-palette, .stitch-overlay, .stitch-overlay-palette, .preview-overlay-blocker")) {
       return;
     }
     const rt = touchRuntimeRef.current;
@@ -658,7 +660,7 @@ function App(): JSX.Element {
   const onPreviewPointerDown = (event: PointerEvent<HTMLDivElement>): void => {
     if (isMobile) return;
     if (event.pointerType !== "mouse" || event.button !== 0 || zoomRef.current <= 1) return;
-    if ((event.target as HTMLElement).closest(".tap-palette, .stitch-overlay, .stitch-overlay-palette")) return;
+    if ((event.target as HTMLElement).closest(".tap-palette, .stitch-overlay, .stitch-overlay-palette, .preview-overlay-blocker")) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     pointerPanRef.current = {
@@ -902,7 +904,7 @@ function App(): JSX.Element {
               >
                 <button
                   type="button"
-                  className="stitch-toggle"
+                  className={stitchPaletteOpen ? "stitch-toggle active" : "stitch-toggle"}
                   onClick={() => {
                     setStitchPaletteOpen((prev) => !prev);
                     setPalette((prev) => ({ ...prev, open: false }));
@@ -936,6 +938,24 @@ function App(): JSX.Element {
                   </div>
                 ) : null}
               </div>
+              {(palette.open || stitchPaletteOpen) ? (
+                <div
+                  className="preview-overlay-blocker"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setPalette((prev) => ({ ...prev, open: false }));
+                    setStitchPaletteOpen(false);
+                  }}
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onTouchStart={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                />
+              ) : null}
               {palette.open ? (
                 <div
                   ref={paletteRef}
@@ -956,7 +976,8 @@ function App(): JSX.Element {
                         title={color.name}
                         aria-label={color.name}
                       >
-                        <span className="swatch" style={{ backgroundColor: color.hex }} />
+                        <span className="swatch" style={swatchStyle(color)} />
+                        {color.patternTile ? <span className="pattern-dot" aria-hidden>柄</span> : null}
                       </button>
                     ))}
                   </div>
@@ -972,13 +993,13 @@ function App(): JSX.Element {
                 <button type="button" className="compact-toggle" onClick={() => zoomBy(0.2)}>+</button>
               </div>
             ) : null}
-            <p className="hint">選択中: {selectedPart ? `${selectedPart.id}. ${selectedPart.name}` : "未選択"}</p>
+            <p className="hint">選択中: {selectedPart ? `${editableDisplayIndex.get(selectedPart.id) ?? selectedPart.id}. ${selectedPart.name}` : "未選択"}</p>
             {isMobile ? <p className="hint zoom">ズーム: {zoom.toFixed(2)}x（2本指ピンチ / 1本指ドラッグ / ダブルタップで戻す）</p> : null}
           </div>
 
           <div className="section-block part-panel">
             <div className="section-head-row">
-              <h2>選択部位（{selectableParts.length}部位）</h2>
+              <h2>選択部位（{editableParts.length}部位）</h2>
               <button
                 type="button"
                 className="compact-toggle"
@@ -989,7 +1010,7 @@ function App(): JSX.Element {
             </div>
             {!partPanelCollapsed ? (
               <div className="part-grid long">
-                {selectableParts.map((part) => (
+                {editableParts.map((part) => (
                   <button
                     key={part.id}
                     type="button"
@@ -999,13 +1020,14 @@ function App(): JSX.Element {
                       setPalette((prev) => ({ ...prev, open: false }));
                     }}
                   >
-                    {part.id}. {part.name}
+                    {editableDisplayIndex.get(part.id) ?? part.id}. {part.name}
                   </button>
                 ))}
               </div>
             ) : (
               <p className="collapsed-note">プレビューをタップして部位選択できます。</p>
             )}
+            <p className="collapsed-note">固定仕様: 首周り / 裾 / リブ はブラック固定です。</p>
           </div>
         </section>
 
@@ -1022,11 +1044,12 @@ function App(): JSX.Element {
                   className={state.parts[selectedPart.id] === color.id ? "color-btn active" : "color-btn"}
                   onClick={() => onSelectColor(color.id)}
                 >
-                  <span className="swatch" style={{ backgroundColor: color.hex }} />
-                  <span>{color.name}</span>
-                </button>
-              );
-            })}
+                    <span className="swatch" style={swatchStyle(color)} />
+                    <span>{color.name}</span>
+                    {color.patternTile ? <span className="pattern-label">柄</span> : null}
+                  </button>
+                );
+              })}
           </div>
         </section>
 
@@ -1072,5 +1095,12 @@ function App(): JSX.Element {
 }
 
 export default App;
+
+
+
+
+
+
+
 
 

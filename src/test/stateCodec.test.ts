@@ -6,10 +6,14 @@ describe("stateCodec", () => {
   it("serialize/deserializeで状態を往復できる", () => {
     const input: SuitState = {
       preset: "marine",
+      stitchColor: "st_black",
       parts: {
-        parts1: "blue",
-        parts2: "black",
+        "1": "black",
+        "2": "navy",
       },
+      logos: [
+        { id: "logo-1", x: 0.4, y: 0.32 },
+      ],
     };
 
     const query = serializeState(input);

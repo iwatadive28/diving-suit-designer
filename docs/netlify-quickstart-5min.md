@@ -9,7 +9,7 @@
 - `npm run build` がローカルで成功する状態
 
 ## 1. Netlify でサイト作成
-1. Netlify にログイン
+1. [Netlify](https://app.netlify.com/) にログイン
 2. `Add new site` -> `Import an existing project`
 3. Git プロバイダで GitHub を選択
 4. 対象リポジトリを選ぶ

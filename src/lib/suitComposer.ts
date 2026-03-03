@@ -11,6 +11,7 @@ type ComposerContext = {
   width: number;
   height: number;
   lineImage: HTMLImageElement;
+  logoImage: HTMLImageElement;
   baseMask: Uint8Array;
   regionMap: Int16Array;
   partIndexById: Map<string, number>;
@@ -24,8 +25,10 @@ type PartMask = {
 };
 
 const LINE_SRC = "/assets/suits_alpha.png";
+const LOGO_SRC = "/assets/logo/log.png";
 const BASE_MASK_SRC = "/assets/default_image.png";
 const BASE_ALPHA = 236;
+const LOGO_SIZE = 54;
 
 let context: ComposerContext | null = null;
 
@@ -326,6 +329,33 @@ function drawHighlight(target: CanvasRenderingContext2D, regionMap: Int16Array, 
   target.drawImage(overlay, 0, 0);
 }
 
+function drawLogos(target: CanvasRenderingContext2D, logoImage: HTMLImageElement, state: SuitState, width: number, height: number): void {
+  if (!state.logos || state.logos.length === 0) {
+    return;
+  }
+
+  state.logos.forEach((logo) => {
+    const cx = Math.max(0, Math.min(width, logo.x * width));
+    const cy = Math.max(0, Math.min(height, logo.y * height));
+    const half = LOGO_SIZE / 2;
+
+    target.save();
+    target.beginPath();
+    target.arc(cx, cy, half, 0, Math.PI * 2);
+    target.closePath();
+    target.clip();
+    target.drawImage(logoImage, cx - half, cy - half, LOGO_SIZE, LOGO_SIZE);
+    target.restore();
+
+    target.strokeStyle = "rgba(0, 0, 0, 0.45)";
+    target.lineWidth = 1.6;
+    target.beginPath();
+    target.arc(cx, cy, half, 0, Math.PI * 2);
+    target.closePath();
+    target.stroke();
+  });
+}
+
 export async function initializeComposer(colors: Color[] = []): Promise<void> {
   if (context) {
     await ensurePatternTiles(colors);
@@ -335,14 +365,16 @@ export async function initializeComposer(colors: Color[] = []): Promise<void> {
   const { width, height } = SUIT_SOURCE_SIZE;
 
   const lineImagePromise = loadImage(LINE_SRC);
+  const logoImagePromise = loadImage(LOGO_SRC);
   const baseImagePromise = loadImage(BASE_MASK_SRC);
   const partImagePromises = PART_DEFINITIONS.map((part) => {
     const key = part.originalRef ?? "";
     return loadImage(`/assets/masks/${key}.png`);
   });
 
-  const [lineImage, baseImage, ...partImages] = await Promise.all([
+  const [lineImage, logoImage, baseImage, ...partImages] = await Promise.all([
     lineImagePromise,
+    logoImagePromise,
     baseImagePromise,
     ...partImagePromises,
   ]);
@@ -361,7 +393,7 @@ export async function initializeComposer(colors: Color[] = []): Promise<void> {
 
   const patternTiles = await loadPatternTiles(colors);
 
-  context = { width, height, lineImage, baseMask, regionMap, partIndexById, patternTiles };
+  context = { width, height, lineImage, logoImage, baseMask, regionMap, partIndexById, patternTiles };
 }
 
 export async function renderPreview(state: SuitState, colors: Color[], stitchColors: Color[], size: number, selectedPartId: string | null): Promise<HTMLCanvasElement> {
@@ -382,6 +414,7 @@ export async function renderPreview(state: SuitState, colors: Color[], stitchCol
   const stitchId = state.stitchColor ?? "st_black";
   const stitchHex = stitchColors.find((item) => item.id === stitchId)?.hex ?? "#111111";
   drawStitchLines(sourceCtx, current.lineImage, stitchHex, current.width, current.height);
+  drawLogos(sourceCtx, current.logoImage, state, current.width, current.height);
   drawHighlight(sourceCtx, current.regionMap, selectedPartId, current.partIndexById, current.width, current.height);
 
   const out = document.createElement("canvas");

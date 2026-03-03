@@ -41,6 +41,22 @@ export function deserializeState(raw: string): SuitState | null {
       return null;
     }
 
+    if (parsed.logos !== undefined) {
+      if (!Array.isArray(parsed.logos)) {
+        return null;
+      }
+      const validLogos = parsed.logos.every((logo) => (
+        logo
+        && typeof logo === "object"
+        && typeof logo.id === "string"
+        && typeof logo.x === "number"
+        && typeof logo.y === "number"
+      ));
+      if (!validLogos) {
+        return null;
+      }
+    }
+
     return parsed;
   } catch {
     return null;
