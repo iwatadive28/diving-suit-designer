@@ -232,10 +232,17 @@ function pickRandom<T>(items: T[]): T {
 
 function applyRandomRecommendation(theme: ColorTheme, config: AppConfig, state: SuitState): SuitState {
   const nextParts: Record<string, string> = {};
+  const isFullRandom = theme.id === "full-random";
+  const isBlackCamoWhite = theme.id === "black-camo-white";
+  const camoCandidates = theme.colors.filter((id) => id.startsWith("camo_"));
+  const fixedCamo = isBlackCamoWhite && camoCandidates.length > 0 ? pickRandom(camoCandidates) : undefined;
 
   config.parts.forEach((part) => {
     const selectable = resolveSelectableColors(part, config.colors).map((color) => color.id);
-    const themed = theme.colors.filter((id) => selectable.includes(id));
+    let themed = isFullRandom ? selectable : theme.colors.filter((id) => selectable.includes(id));
+    if (isBlackCamoWhite && fixedCamo) {
+      themed = themed.filter((id) => !id.startsWith("camo_") || id === fixedCamo);
+    }
     const pool = themed.length > 0 ? themed : selectable;
     nextParts[part.id] = pickRandom(pool);
   });
@@ -390,6 +397,10 @@ function App(): JSX.Element {
     window.setTimeout(() => {
       setToasts((prev) => prev.filter((item) => item.id !== toast.id));
     }, 3000);
+  };
+
+  const closeMobileMenu = (): void => {
+    setMenuOpen(false);
   };
 
   useEffect(() => {
@@ -739,10 +750,11 @@ function App(): JSX.Element {
         ...prev.parts,
         ...preset.parts,
       },
+      stitchColor: preset.stitchColor ?? prev.stitchColor,
     }));
 
     setPalette((prev) => ({ ...prev, open: false }));
-    setMenuOpen(false);
+    closeMobileMenu();
   };
 
   const onRecommendRandom = (): void => {
@@ -752,11 +764,11 @@ function App(): JSX.Element {
       return;
     }
 
+    closeMobileMenu();
     commitState((prev) => applyRandomRecommendation(theme, config, prev));
-    addToast(`おすすめを生成しました: ${theme.name}`);
+    addToast(`ランダム生成しました: ${theme.name}`);
     setPalette((prev) => ({ ...prev, open: false }));
     setStitchPaletteOpen(false);
-    setMenuOpen(false);
   };
 
   const onResetBlack = (): void => {
@@ -1152,7 +1164,7 @@ function App(): JSX.Element {
   const menuSection = (
     <>
       <div className="menu-section">
-        <h3>プリセット / ランダムおすすめ</h3>
+        <h3>プリセット</h3>
         <div className="preset-grid">
           {config.presets.map((preset) => (
             <button key={preset.id} type="button" className="preset-btn" onClick={() => onApplyPreset(preset.id)}>
@@ -1160,13 +1172,17 @@ function App(): JSX.Element {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="menu-section">
+        <h3>ランダム生成</h3>
         <div className="recommend-row">
           <select value={selectedThemeId} onChange={(event) => setSelectedThemeId(event.target.value)}>
             {config.colorThemes.map((theme) => (
               <option key={theme.id} value={theme.id}>{theme.name}</option>
             ))}
           </select>
-          <button type="button" className="preset-btn" onClick={onRecommendRandom}>おすすめ生成</button>
+          <button type="button" className="preset-btn" onClick={onRecommendRandom}>ランダム生成</button>
         </div>
         <button type="button" className="danger-btn inline-reset" onClick={onResetBlack}>全身ブラックにリセット</button>
       </div>
@@ -1482,7 +1498,7 @@ function App(): JSX.Element {
       <footer className="app-footer" aria-label="コピーライト">
         <img className="footer-icon-image" src="/assets/ペンギン_右向き.png" alt="ペンギンアイコン" />
         <p>© 2026 kiws</p>
-        <p>このアプリはサンプルです。</p>
+        <p>このアプリはトライアル版です。ご意見・不具合があればぜひ教えてください。一緒に育てていけると嬉しいです。</p>
       </footer>
 
       {isHelpOpen ? (
@@ -1504,7 +1520,7 @@ function App(): JSX.Element {
                 <li>スーツ画像をタップして、色を変えたい部位を選びます。</li>
                 <li>表示されたカラーパレットから色を選ぶと、すぐ反映されます。</li>
                 <li>右上の「ステッチ」から、縫い目の色を変更できます。</li>
-                <li>必要なら「おすすめ生成」や「全身ブラックにリセット」で全体を整えます。</li>
+                <li>必要なら「ランダム生成」や「全身ブラックにリセット」で全体を整えます。</li>
               </ol>
             </section>
 

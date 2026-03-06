@@ -26,6 +26,7 @@ export type Preset = {
   id: string;
   name: string;
   parts: Record<string, string>;
+  stitchColor?: string;
 };
 
 export type LogoPlacement = {

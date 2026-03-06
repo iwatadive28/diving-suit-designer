@@ -9,7 +9,12 @@ async function loadJson<T>(url: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-function normalizePresets(presets: Preset[], validPartIds: Set<string>, validColorIds: Set<string>): Preset[] {
+function normalizePresets(
+  presets: Preset[],
+  validPartIds: Set<string>,
+  validColorIds: Set<string>,
+  validStitchIds: Set<string>,
+): Preset[] {
   return presets.map((preset) => {
     const normalizedParts: Record<string, string> = {};
 
@@ -25,9 +30,19 @@ function normalizePresets(presets: Preset[], validPartIds: Set<string>, validCol
       normalizedParts[partId] = colorId;
     });
 
+    let stitchColor: string | undefined = undefined;
+    if (preset.stitchColor) {
+      if (validStitchIds.has(preset.stitchColor)) {
+        stitchColor = preset.stitchColor;
+      } else {
+        console.warn(`[preset:${preset.id}] 未定義のステッチ色IDを除外しました: ${preset.stitchColor}`);
+      }
+    }
+
     return {
       ...preset,
       parts: normalizedParts,
+      stitchColor,
     };
   });
 }
@@ -138,7 +153,7 @@ export async function loadConfig(): Promise<AppConfig> {
   const validPartIds = new Set(parts.map((part) => part.id));
   const validStitchIds = new Set(stitchColors.map((color) => color.id));
 
-  const presets = normalizePresets(presetsRaw, validPartIds, validColorIds);
+  const presets = normalizePresets(presetsRaw, validPartIds, validColorIds, validStitchIds);
   const colorThemes = normalizeThemes(themesRaw, validColorIds, validStitchIds);
 
   return {
