@@ -1,20 +1,38 @@
 ﻿[
   {
-    "id": "warm",
-    "name": "ウォーム",
-    "colors": ["red", "orange", "k_orange", "k_yellow", "brown", "olive", "sand", "candy_pink"],
-    "stitchColors": ["st_red", "st_orange", "st_k_yellow", "st_brown", "st_pink", "st_safari"]
+    "id": "mono",
+    "name": "モノトーン系",
+    "colors": ["black", "white", "dark_gray", "silver_gray", "melange_bk"],
+    "stitchColors": ["st_black", "st_white", "st_cool_gray", "st_dark_gray"]
   },
   {
     "id": "cool",
-    "name": "クール",
+    "name": "クール系",
     "colors": ["navy", "royal", "brilliant_blue", "france", "turquoise", "mint", "camo_black", "silver_gray"],
     "stitchColors": ["st_navy", "st_royal", "st_cyan", "st_powder_blue", "st_cool_gray", "st_dark_gray"]
   },
   {
-    "id": "mono",
-    "name": "モノトーン",
-    "colors": ["black", "white", "dark_gray", "silver_gray", "melange_bk"],
+    "id": "black-yellow",
+    "name": "ブラック×イエロー系",
+    "colors": ["black", "dark_gray", "k_yellow", "sand", "k_orange"],
+    "stitchColors": ["st_black", "st_k_yellow", "st_orange", "st_white"]
+  },
+  {
+    "id": "black-red",
+    "name": "ブラック×レッド系",
+    "colors": ["black", "dark_gray", "red", "orange", "k_orange", "brown"],
+    "stitchColors": ["st_black", "st_red", "st_orange", "st_white"]
+  },
+  {
+    "id": "black-camo-white",
+    "name": "ブラック×カモホワイト系",
+    "colors": ["black", "dark_gray", "white", "camo_black", "camo_khaki", "camo_gray", "melange_bk"],
     "stitchColors": ["st_black", "st_white", "st_cool_gray", "st_dark_gray"]
+  },
+  {
+    "id": "full-random",
+    "name": "フルランダム",
+    "colors": [],
+    "stitchColors": []
   }
 ]

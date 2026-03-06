@@ -2,6 +2,7 @@
   {
     "id": "classic-black",
     "name": "クラシックブラック",
+    "stitchColor": "st_orange",
     "parts": {
       "1": "black",
       "2": "black",
@@ -27,6 +28,7 @@
   {
     "id": "ocean-blue",
     "name": "オーシャンブルー",
+    "stitchColor": "st_black",
     "parts": {
       "1": "navy",
       "2": "royal",
@@ -52,25 +54,26 @@
   {
     "id": "warm-active",
     "name": "ウォームアクティブ",
+    "stitchColor": "st_white",
     "parts": {
       "1": "black",
-      "2": "orange",
-      "3": "red",
+      "2": "black",
+      "3": "black",
       "4": "k_orange",
-      "5": "k_orange",
+      "5": "black",
       "6": "red",
-      "7": "orange",
-      "8": "brown",
-      "9": "olive",
+      "7": "black",
+      "8": "dark_gray",
+      "9": "black",
       "10": "red",
-      "11": "orange",
+      "11": "black",
       "12": "k_orange",
-      "13": "olive",
+      "13": "black",
       "14": "red",
-      "15": "orange",
+      "15": "black",
       "16": "black",
-      "17": "olive",
-      "18": "brown",
+      "17": "dark_gray",
+      "18": "black",
       "19": "black"
     }
   }
